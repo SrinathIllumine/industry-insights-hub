@@ -231,3 +231,30 @@ export async function deleteCompany(id: string) {
   const { error } = await supabase.from("companies").delete().eq("id", id);
   if (error) throw error;
 }
+
+const MEDIA_BUCKET = "company-media";
+
+/** Uploads an image to public storage and returns its public URL. */
+export async function uploadCompanyImage(file: File): Promise<string> {
+  if (!file.type.startsWith("image/")) {
+    throw new Error("Please choose an image file (PNG, JPG, SVG, …).");
+  }
+  if (file.size > 10 * 1024 * 1024) {
+    throw new Error("Image is larger than 10 MB — please use a smaller file.");
+  }
+  const ext = (file.name.split(".").pop() || "png").toLowerCase().replace(/[^a-z0-9]/g, "");
+  const id =
+    typeof crypto !== "undefined" && "randomUUID" in crypto
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  const path = `benchmarks/${id}.${ext || "png"}`;
+
+  const { error } = await supabase.storage.from(MEDIA_BUCKET).upload(path, file, {
+    cacheControl: "3600",
+    upsert: false,
+    ...(file.type ? { contentType: file.type } : {}),
+  });
+  if (error) throw error;
+
+  return supabase.storage.from(MEDIA_BUCKET).getPublicUrl(path).data.publicUrl;
+}

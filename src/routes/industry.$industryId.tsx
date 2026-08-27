@@ -71,7 +71,7 @@ function IndustryPage() {
         breadcrumb={
           <>
             <Link to="/" className="hover:text-foreground">
-              Industries
+              Industry Research
             </Link>
             <span className="text-border">/</span>
             <span className="text-foreground">{industry?.name}</span>

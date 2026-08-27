@@ -127,7 +127,7 @@ function CompanyPage() {
         breadcrumb={
           <>
             <Link to="/" className="hover:text-foreground">
-              Industries
+              Industry Research
             </Link>
             <span className="text-border">/</span>
             {industry ? (

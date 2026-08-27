@@ -27,13 +27,13 @@ import type { Industry } from "@/lib/research-types";
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "Industry Research Engine — Industries" },
+      { title: "Industry Research — Industry Research Engine for Retailer Enablement System" },
       {
         name: "description",
         content:
           "Browse industry verticals and open decision-grade company research profiles for leadership review.",
       },
-      { property: "og:title", content: "Industry Research Engine — Industries" },
+      { property: "og:title", content: "Industry Research — Industry Research Engine for Retailer Enablement System" },
       {
         property: "og:description",
         content: "Browse industry verticals and open company research profiles.",
@@ -67,7 +67,7 @@ function IndustriesPage() {
   return (
     <AppShell>
       <PageHeading
-        title="Industries"
+        title="Industry Research"
         subtitle="Select an industry to explore its company research profiles."
         action={
           <Button variant="outline" className="rounded-full" onClick={() => setManageOpen(true)}>

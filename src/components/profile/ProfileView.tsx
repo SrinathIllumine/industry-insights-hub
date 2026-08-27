@@ -129,16 +129,22 @@ export function ProfileView({ profile }: { profile: CompanyProfile }) {
 
             <div className="mt-6 grid grid-cols-2 gap-4">
               <div className="rounded-xl bg-muted p-4">
-                <span className="label-caps">Revenue CAGR</span>
+                <span className="label-caps">Company revenue CAGR</span>
                 <p className="font-display text-2xl font-bold text-foreground">
                   {fin.revenueCagr || "—"}
                 </p>
+                <span className="text-[11px] font-medium text-muted-foreground">
+                  5-year growth rate
+                </span>
               </div>
               <div className="rounded-xl bg-muted p-4">
-                <span className="label-caps">Industry CAGR</span>
+                <span className="label-caps">Industry revenue CAGR</span>
                 <p className="font-display text-2xl font-bold text-foreground">
                   {fin.industryCagr || "—"}
                 </p>
+                <span className="text-[11px] font-medium text-muted-foreground">
+                  5-year growth rate
+                </span>
               </div>
             </div>
           </div>
@@ -165,7 +171,7 @@ export function ProfileView({ profile }: { profile: CompanyProfile }) {
                 <img
                   src={fin.benchmarkImageUrl}
                   alt="Where the company stands in the industry"
-                  className="aspect-[2/1] w-full object-cover"
+                  className="aspect-[2/1] w-full bg-card object-contain p-2"
                 />
               ) : (
                 <span className="grid aspect-[2/1] w-full place-items-center px-4 text-center text-[10px] font-medium uppercase tracking-widest text-muted-foreground">
@@ -334,7 +340,7 @@ export function ProfileView({ profile }: { profile: CompanyProfile }) {
             <img
               src={fin.benchmarkImageUrl}
               alt="Industry benchmark chart"
-              className="w-full rounded-xl border border-border"
+              className="max-h-[70vh] w-full rounded-xl border border-border bg-card object-contain p-2"
             />
           ) : (
             <p className="text-sm text-muted-foreground">

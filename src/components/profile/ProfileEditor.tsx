@@ -1,7 +1,9 @@
 import { useRef, useState } from "react";
-import { Loader2, Plus, Trash2, Upload, X } from "lucide-react";
+import { Image as ImageIcon, Loader2, Plus, Trash2, Upload, X } from "lucide-react";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
+
+import { cn } from "@/lib/utils";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,6 +19,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
 import { structureResearchDump } from "@/lib/research-ai.functions";
+import { uploadCompanyImage } from "@/lib/research-data";
 import type { SettingsMap } from "@/lib/research-data";
 import {
   emptyVertical,
@@ -223,12 +226,12 @@ export function ProfileEditor({
 
           <div className="grid gap-4 md:grid-cols-2">
             <Field
-              label="Revenue CAGR"
+              label="Company revenue CAGR (5-year growth rate)"
               value={fin.revenueCagr}
               onChange={(v) => setProfile({ ...profile, financials: { ...fin, revenueCagr: v } })}
             />
             <Field
-              label="Industry CAGR"
+              label="Industry revenue CAGR (5-year growth rate)"
               value={fin.industryCagr}
               onChange={(v) => setProfile({ ...profile, financials: { ...fin, industryCagr: v } })}
             />
@@ -256,16 +259,16 @@ export function ProfileEditor({
               onChange={(v) => setProfile({ ...profile, financials: { ...fin, verdictNote: v } })}
             />
             <Field
-              label="Benchmark chart image URL"
+              label="Benchmark note"
+              value={fin.benchmarkNote}
+              onChange={(v) => setProfile({ ...profile, financials: { ...fin, benchmarkNote: v } })}
+            />
+            <ImageField
+              label="Benchmark chart image (where the company stands in the industry)"
               value={fin.benchmarkImageUrl}
               onChange={(v) =>
                 setProfile({ ...profile, financials: { ...fin, benchmarkImageUrl: v } })
               }
-            />
-            <Field
-              label="Benchmark note"
-              value={fin.benchmarkNote}
-              onChange={(v) => setProfile({ ...profile, financials: { ...fin, benchmarkNote: v } })}
             />
           </div>
         </TabsContent>
@@ -727,6 +730,100 @@ function TextField({
     <div className="space-y-1.5">
       <Label>{label}</Label>
       <Textarea rows={3} value={value} onChange={(e) => onChange(e.target.value)} />
+    </div>
+  );
+}
+
+function ImageField({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState(false);
+  const [dragging, setDragging] = useState(false);
+
+  const handleFiles = async (files: FileList | null) => {
+    const file = files?.[0];
+    if (!file) return;
+    setBusy(true);
+    try {
+      const url = await uploadCompanyImage(file);
+      onChange(url);
+      toast.success("Image uploaded");
+    } catch (error) {
+      toast.error((error as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="space-y-2 md:col-span-2">
+      <Label>{label}</Label>
+      <div
+        onDragOver={(e) => {
+          e.preventDefault();
+          setDragging(true);
+        }}
+        onDragLeave={() => setDragging(false)}
+        onDrop={(e) => {
+          e.preventDefault();
+          setDragging(false);
+          void handleFiles(e.dataTransfer.files);
+        }}
+        onClick={() => inputRef.current?.click()}
+        className={cn(
+          "grid min-h-[9rem] cursor-pointer place-items-center rounded-xl border-2 border-dashed bg-muted/40 p-4 text-center transition-colors",
+          dragging ? "border-primary bg-muted" : "border-border",
+        )}
+      >
+        {busy ? (
+          <Loader2 className="size-5 animate-spin text-muted-foreground" />
+        ) : value ? (
+          <img
+            src={value}
+            alt="Benchmark chart preview"
+            className="max-h-56 w-full object-contain"
+          />
+        ) : (
+          <div className="space-y-1">
+            <ImageIcon className="mx-auto size-6 text-muted-foreground" />
+            <p className="text-sm font-medium">Drop an image here or click to upload</p>
+            <p className="text-xs text-muted-foreground">
+              PNG, JPG, SVG, GIF — up to 10 MB. Or paste an image URL below.
+            </p>
+          </div>
+        )}
+        <input
+          ref={inputRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={(e) => void handleFiles(e.target.files)}
+        />
+      </div>
+      <div className="flex gap-2">
+        <Input
+          placeholder="https://… image URL"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+        />
+        {value ? (
+          <Button
+            size="icon"
+            variant="ghost"
+            onClick={() => onChange("")}
+            aria-label="Remove image"
+          >
+            <Trash2 className="size-4 text-destructive" />
+          </Button>
+        ) : null}
+      </div>
     </div>
   );
 }
