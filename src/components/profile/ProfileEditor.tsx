@@ -779,10 +779,12 @@ function ImportPanel({
     if (!files?.length) return;
     const texts: string[] = [];
     const foundImages: string[] = [];
+    let sawHtml = false;
 
     for (const file of Array.from(files)) {
       const content = await file.text();
       if (isHtmlFile(file)) {
+        sawHtml = true;
         const { text, images } = parseHtmlDump(content);
         let block = `--- ${file.name} (HTML → text) ---\n${text}`;
         const linkable = images.filter((im) => im.src.startsWith("http"));
@@ -807,6 +809,10 @@ function ImportPanel({
       onImagesFound?.(foundImages);
       toast.success(
         `${foundImages.length} image${foundImages.length > 1 ? "s" : ""} found — pick them from any image field`,
+      );
+    } else if (sawHtml) {
+      toast.info(
+        "No embeddable images found in the HTML — images with relative paths can't be pulled in.",
       );
     }
   };

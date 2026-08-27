@@ -505,7 +505,6 @@ export function ProfileView({ profile }: { profile: CompanyProfile }) {
 
 function ChannelEngagement({ v }: { v: Vertical }) {
   const hasAnything =
-    v.stakeholders.length > 0 ||
     v.engagementModel.length > 0 ||
     !!v.engagementMapUrl ||
     v.channelStats.length > 0 ||
@@ -521,12 +520,6 @@ function ChannelEngagement({ v }: { v: Vertical }) {
 
   return (
     <div className="space-y-4">
-      {v.stakeholders.length > 0 ? (
-        <SubCard title="Stakeholders involved in the engagement">
-          <BulletList items={v.stakeholders} />
-        </SubCard>
-      ) : null}
-
       {v.engagementModel.length > 0 ? (
         <SubCard title="How the engagement works">
           <BulletList items={v.engagementModel} />
@@ -651,7 +644,6 @@ function VerticalColumn({
         <ClickIn
           label="Channel engagement model"
           count={
-            v.stakeholders.length +
             v.engagementModel.length +
             v.channelStats.length +
             v.dealerChannelTypes.length +
