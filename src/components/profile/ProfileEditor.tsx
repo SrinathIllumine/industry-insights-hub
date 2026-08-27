@@ -271,6 +271,80 @@ export function ProfileEditor({
               }
             />
           </div>
+
+          <div className="space-y-4 rounded-xl border border-border bg-muted/30 p-4">
+            <div>
+              <Label>Narrative charts</Label>
+              <p className="text-xs text-muted-foreground">
+                Charts that tell the financial story. Each needs a caption explaining what the
+                reader should take away.
+              </p>
+            </div>
+            {fin.charts.map((chart, ci) => {
+              const updateChart = (patch: Partial<(typeof fin.charts)[number]>) => {
+                const charts = [...fin.charts];
+                charts[ci] = { ...chart, ...patch };
+                setProfile({ ...profile, financials: { ...fin, charts } });
+              };
+              return (
+                <div key={ci} className="space-y-3 rounded-lg border border-border bg-card p-4">
+                  <div className="flex justify-end">
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      onClick={() =>
+                        setProfile({
+                          ...profile,
+                          financials: {
+                            ...fin,
+                            charts: fin.charts.filter((_, x) => x !== ci),
+                          },
+                        })
+                      }
+                    >
+                      <Trash2 className="size-4 text-destructive" />
+                    </Button>
+                  </div>
+                  <Field
+                    label="Chart title"
+                    value={chart.title}
+                    onChange={(v) => updateChart({ title: v })}
+                  />
+                  <TextField
+                    label="What story does this chart tell?"
+                    value={chart.caption}
+                    onChange={(v) => updateChart({ caption: v })}
+                  />
+                  <ImageField
+                    label="Chart image"
+                    value={chart.imageUrl}
+                    onChange={(v) => updateChart({ imageUrl: v })}
+                  />
+                </div>
+              );
+            })}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() =>
+                setProfile({
+                  ...profile,
+                  financials: {
+                    ...fin,
+                    charts: [...fin.charts, { title: "", imageUrl: "", caption: "" }],
+                  },
+                })
+              }
+            >
+              <Plus className="size-4" /> Add chart
+            </Button>
+          </div>
+
+          <TextField
+            label="Sense-making narrative (≈2 lines shown at the end of the section)"
+            value={fin.narrative}
+            onChange={(v) => setProfile({ ...profile, financials: { ...fin, narrative: v } })}
+          />
         </TabsContent>
 
         <TabsContent value="challenges" className="space-y-4 pt-6">
@@ -330,19 +404,27 @@ export function ProfileEditor({
                   </Select>
                 </div>
               </div>
-              <TextField
-                label="Actual problem"
-                value={challenge.problem}
-                onChange={(v) => {
-                  const challenges = [...profile.challenges];
-                  challenges[i] = { ...challenge, problem: v };
-                  setProfile({ ...profile, challenges });
-                }}
-              />
+              <div className="space-y-1.5">
+                <Label>Detailed problem explanation</Label>
+                <p className="text-xs text-muted-foreground">
+                  Write it so any reader understands: what the problem is, why it exists, what is
+                  at stake, how it is playing out. A few lines are shown by default with a “see
+                  more”.
+                </p>
+                <Textarea
+                  rows={7}
+                  value={challenge.problem}
+                  onChange={(e) => {
+                    const challenges = [...profile.challenges];
+                    challenges[i] = { ...challenge, problem: e.target.value };
+                    setProfile({ ...profile, challenges });
+                  }}
+                />
+              </div>
               <div className="grid gap-4 md:grid-cols-3">
                 <div className="md:col-span-2">
                   <TextField
-                    label="Quote from stakeholders"
+                    label="Quote from stakeholders (verbatim, must be relevant to this problem)"
                     value={challenge.quote}
                     onChange={(v) => {
                       const challenges = [...profile.challenges];
@@ -361,6 +443,14 @@ export function ProfileEditor({
                   }}
                 />
               </div>
+              <SourcesField
+                items={challenge.sources}
+                onChange={(sources) => {
+                  const challenges = [...profile.challenges];
+                  challenges[i] = { ...challenge, sources };
+                  setProfile({ ...profile, challenges });
+                }}
+              />
             </RowCard>
           ))}
           <Button
@@ -370,7 +460,7 @@ export function ProfileEditor({
                 ...profile,
                 challenges: [
                   ...profile.challenges,
-                  { theme: "", problem: "", quote: "", quoteBy: "", tag: "" },
+                  { theme: "", problem: "", quote: "", quoteBy: "", tag: "", sources: [] },
                 ],
               })
             }
@@ -401,32 +491,89 @@ export function ProfileEditor({
                     onChange={(x) => update({ description: x })}
                   />
                 </div>
-                <div className="grid gap-4 md:grid-cols-2">
+                <TextField
+                  label="Basic details"
+                  value={v.basicDetails}
+                  onChange={(x) => update({ basicDetails: x })}
+                />
+
+                <div className="space-y-4 rounded-xl border border-border bg-muted/30 p-4">
+                  <Label>Revenue</Label>
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <Field
+                      label="Headline revenue value"
+                      value={v.revenueValue}
+                      onChange={(x) => update({ revenueValue: x })}
+                    />
+                    <Field
+                      label="Growth (e.g. +12% YoY / 3-yr CAGR 9%)"
+                      value={v.revenueGrowth}
+                      onChange={(x) => update({ revenueGrowth: x })}
+                    />
+                  </div>
                   <TextField
-                    label="Basic details"
-                    value={v.basicDetails}
-                    onChange={(x) => update({ basicDetails: x })}
-                  />
-                  <TextField
-                    label="Revenue details"
+                    label="Revenue narrative (optional, for depth)"
                     value={v.revenueDetails}
                     onChange={(x) => update({ revenueDetails: x })}
                   />
+                  <PairListField
+                    label="Major revenue contributors"
+                    help="Products / services / elements of this vertical that drive revenue."
+                    aLabel="Product / service / element"
+                    bLabel="Share / value / why it matters"
+                    items={v.revenueContributors.map((c) => ({ a: c.name, b: c.detail }))}
+                    onChange={(rows) =>
+                      update({
+                        revenueContributors: rows.map((r) => ({ name: r.a, detail: r.b })),
+                      })
+                    }
+                  />
                 </div>
+
                 <div className="grid gap-6 md:grid-cols-2">
                   <BulletsField
-                    label="Stakeholders"
+                    label="Stakeholders involved in the retail engagement"
                     help="One stakeholder or group per bullet — include role, context and any numbers."
                     items={v.stakeholders}
                     onChange={(x) => update({ stakeholders: x })}
                   />
                   <BulletsField
-                    label="Channel engagement model"
-                    help="One step / channel per bullet. Keep figures readable, e.g. “~12,000 retailers across 4 zones”."
+                    label="How the channel engagement works (steps)"
+                    help="One step / mechanism per bullet. Keep figures readable, e.g. “~12,000 retailers across 4 zones”."
                     items={v.engagementModel}
                     onChange={(x) => update({ engagementModel: x })}
                   />
                 </div>
+
+                <div className="space-y-4 rounded-xl border border-border bg-muted/30 p-4">
+                  <div>
+                    <Label>Retail network detail</Label>
+                    <p className="text-xs text-muted-foreground">
+                      Leave anything blank and it is simply hidden in the report.
+                    </p>
+                  </div>
+                  <ImageField
+                    label="Stakeholder engagement map (image)"
+                    value={v.engagementMapUrl}
+                    onChange={(x) => update({ engagementMapUrl: x })}
+                  />
+                  <PairListField
+                    label="Network numbers (shown as a numbers card)"
+                    help="Dealers, dealer executives, salesforce, distributors, retail touchpoints…"
+                    aLabel="Label"
+                    bLabel="Number"
+                    items={v.channelStats.map((s) => ({ a: s.label, b: s.value }))}
+                    onChange={(rows) =>
+                      update({ channelStats: rows.map((r) => ({ label: r.a, value: r.b })) })
+                    }
+                  />
+                  <BulletsField
+                    label="Types of dealers & channels"
+                    items={v.dealerChannelTypes}
+                    onChange={(x) => update({ dealerChannelTypes: x })}
+                  />
+                </div>
+
                 <ContributionsField
                   models={settings.illumine_models}
                   items={v.contributions}
@@ -824,6 +971,119 @@ function ImageField({
           </Button>
         ) : null}
       </div>
+    </div>
+  );
+}
+
+function SourcesField({
+  items,
+  onChange,
+}: {
+  items: { label: string; url: string }[];
+  onChange: (next: { label: string; url: string }[]) => void;
+}) {
+  return (
+    <div className="space-y-2">
+      <Label>Reference sources</Label>
+      <p className="text-xs text-muted-foreground">
+        Where the problem / quote was pulled from — a publication name and its URL.
+      </p>
+      {items.map((s, i) => (
+        <div key={i} className="flex items-center gap-2">
+          <Input
+            className="max-w-[14rem]"
+            placeholder="Source name"
+            value={s.label}
+            onChange={(e) => {
+              const next = [...items];
+              next[i] = { ...s, label: e.target.value };
+              onChange(next);
+            }}
+          />
+          <Input
+            placeholder="https://…"
+            value={s.url}
+            onChange={(e) => {
+              const next = [...items];
+              next[i] = { ...s, url: e.target.value };
+              onChange(next);
+            }}
+          />
+          <Button
+            size="icon"
+            variant="ghost"
+            onClick={() => onChange(items.filter((_, x) => x !== i))}
+          >
+            <Trash2 className="size-4 text-destructive" />
+          </Button>
+        </div>
+      ))}
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={() => onChange([...items, { label: "", url: "" }])}
+      >
+        <Plus className="size-4" /> Add source
+      </Button>
+    </div>
+  );
+}
+
+function PairListField({
+  label,
+  help,
+  aLabel,
+  bLabel,
+  items,
+  onChange,
+}: {
+  label: string;
+  help?: string;
+  aLabel: string;
+  bLabel: string;
+  items: { a: string; b: string }[];
+  onChange: (next: { a: string; b: string }[]) => void;
+}) {
+  return (
+    <div className="space-y-2">
+      <Label>{label}</Label>
+      {help ? <p className="text-xs text-muted-foreground">{help}</p> : null}
+      {items.map((row, i) => (
+        <div key={i} className="flex items-start gap-2">
+          <Input
+            placeholder={aLabel}
+            value={row.a}
+            onChange={(e) => {
+              const next = [...items];
+              next[i] = { ...row, a: e.target.value };
+              onChange(next);
+            }}
+          />
+          <Input
+            placeholder={bLabel}
+            value={row.b}
+            onChange={(e) => {
+              const next = [...items];
+              next[i] = { ...row, b: e.target.value };
+              onChange(next);
+            }}
+          />
+          <Button
+            size="icon"
+            variant="ghost"
+            onClick={() => onChange(items.filter((_, x) => x !== i))}
+          >
+            <Trash2 className="size-4 text-destructive" />
+          </Button>
+        </div>
+      ))}
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={() => onChange([...items, { a: "", b: "" }])}
+      >
+        <Plus className="size-4" /> Add row
+      </Button>
     </div>
   );
 }

@@ -20,24 +20,41 @@ const PROFILE_SHAPE = `{
       { "name": "EBITDA", "values": [], "grades": [] },
       { "name": "PAT", "values": [], "grades": [] }
     ],
-    "revenueCagr": "string e.g. 14.2%",
-    "industryCagr": "string e.g. 9.0%",
+    "revenueCagr": "string e.g. 14.2% (company, 5-yr)",
+    "industryCagr": "string e.g. 9.0% (industry, 5-yr)",
     "verdict": "one of the allowed financial tags",
     "verdictNote": "one short sentence justifying the verdict",
     "benchmarkImageUrl": "https URL of a chart image if present in the input, else empty string",
-    "benchmarkNote": "short note on where the company stands in the industry"
+    "benchmarkNote": "short note on where the company stands in the industry",
+    "charts": [
+      { "title": "what the chart shows", "imageUrl": "https URL of a chart/graph image found in the input, else empty", "caption": "1-2 sentences on the STORY this chart tells (trend, inflection, divergence)" }
+    ],
+    "narrative": "exactly 2 sentences making sense of their financial status AND where they are headed"
   },
   "challenges": [
-    { "theme": "one of the allowed themes", "problem": "the actual problem", "quote": "stakeholder quote or empty", "quoteBy": "role of the person or empty", "tag": "one of the allowed challenge tags" }
+    {
+      "theme": "one of the allowed themes",
+      "problem": "a thorough, plain-language explanation (3-6 sentences) that ANY reader can understand: what the problem is, why it exists, what is at stake, and how it is playing out",
+      "quote": "a VERBATIM stakeholder quote from the input that is directly relevant to THIS problem; empty string if none is genuinely relevant — never force-fit",
+      "quoteBy": "role/name of the person quoted, or empty",
+      "tag": "one of the allowed challenge tags",
+      "sources": [ { "label": "publication / doc name", "url": "https URL the problem or quote was pulled from" } ]
+    }
   ],
   "verticals": [
     {
       "name": "BU name",
       "description": "one-liner",
       "basicDetails": "short bullet-ish text",
-      "revenueDetails": "revenue and share",
-      "stakeholders": ["one readable bullet per stakeholder or group, include role/context and any numbers"],
+      "revenueDetails": "optional longer revenue narrative for depth",
+      "revenueValue": "headline revenue figure for this vertical, e.g. INR 4,200 Cr (FY24)",
+      "revenueGrowth": "growth, e.g. +12% YoY or 3-yr CAGR 9%",
+      "revenueContributors": [ { "name": "product / service / element of this vertical", "detail": "share or value or why it matters" } ],
+      "stakeholders": ["one readable bullet per stakeholder or group involved in the retail engagement, include role/context and any numbers"],
       "engagementModel": ["one readable bullet per channel / step of the channel engagement model, keep numbers legible"],
+      "engagementMapUrl": "https URL of a stakeholder engagement-map image if present, else empty",
+      "channelStats": [ { "label": "e.g. Dealers / Dealer executives / Salesforce / Distributors / Retail touchpoints", "value": "the number, e.g. ~14,000" } ],
+      "dealerChannelTypes": ["type of dealer or channel active in this vertical, e.g. Exclusive brand outlets, Multi-brand dealers, Project/institutional, Rural sub-dealers"],
       "contributions": [
         { "model": "one of the allowed Illumine models, or a new short model name", "configuration": "how this model could be configured for this company" }
       ]
@@ -64,14 +81,20 @@ Return ONLY JSON matching this shape, no markdown fences:
 ${PROFILE_SHAPE}
 
 Rules:
-- Use only information present in the input. Leave fields as empty strings or empty arrays when unknown. Never invent numbers.
+- Use only information present in the input. Leave fields as empty strings or empty arrays when unknown. Never invent numbers, quotes or URLs.
+- Go DEEP: prefer thorough, insight-rich explanations over terse surface data. The reader is company leadership making decisions.
+- The output structure is dynamic: only populate what the input genuinely supports. Sparse input → fewer array items, empty optional fields. Rich input → more contributors, more channelStats, more charts.
 - "grades" express how good each financial figure is: "good" (healthy/growing), "warn" (flat/mild concern), "bad" (loss/decline), "none" (no basis).
 - Each metric's values and grades arrays must have exactly the same length as "years".
+- financials.narrative must be exactly two sentences and must include a forward-looking view.
+- challenges[].problem must be a detailed multi-sentence explanation, not a headline.
+- challenges[].quote must be verbatim from the input AND clearly about that same problem. If nothing fits, leave it empty rather than force-fitting.
+- Only include a source in "sources" if a real URL or named document appears in the input.
 - Allowed challenge themes (pick the closest one, never invent new): ${data.themes.join(" | ") || "(none configured)"}
 - Allowed challenge tags: ${data.challengeTags.join(" | ") || "(none configured)"}
 - Allowed financial verdict tags: ${data.financialTags.join(" | ") || "(none configured)"}
 - Allowed Illumine models for vertical contributions (prefer these, but a new short model name is allowed): ${data.illumineModels.join(" | ") || "(none configured)"}
-- "stakeholders" and "engagementModel" must be arrays of short readable bullet strings, never a single blob.`;
+- "stakeholders", "engagementModel" and "dealerChannelTypes" must be arrays of short readable bullet strings, never a single blob.`;
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
