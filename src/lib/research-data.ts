@@ -1,0 +1,183 @@
+import { queryOptions } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import {
+  normalizeProfile,
+  type Company,
+  type CompanyProfile,
+  type Industry,
+} from "./research-types";
+
+export const SETTING_KEYS = [
+  "themes",
+  "challenge_tags",
+  "financial_tags",
+  "initiative_areas",
+  "engagement_stages",
+] as const;
+
+export type SettingKey = (typeof SETTING_KEYS)[number];
+export type SettingsMap = Record<SettingKey, string[]>;
+
+export const SETTING_LABELS: Record<SettingKey, { title: string; help: string }> = {
+  themes: {
+    title: "Challenge themes",
+    help: "The finite list of themes used in the Business Challenge / Aspiration block.",
+  },
+  challenge_tags: {
+    title: "Challenge tags",
+    help: "Scope tags shown next to each challenge, e.g. company-wide or BU-specific.",
+  },
+  financial_tags: {
+    title: "Financial verdict tags",
+    help: "Overall verdict options for the financials block.",
+  },
+  initiative_areas: {
+    title: "Initiative areas",
+    help: "Areas available in the company-level research table.",
+  },
+  engagement_stages: {
+    title: "Engagement stages",
+    help: "Stages used to track partner contributions.",
+  },
+};
+
+export const industriesQuery = queryOptions({
+  queryKey: ["industries"],
+  queryFn: async (): Promise<Industry[]> => {
+    const { data, error } = await supabase
+      .from("industries")
+      .select("id, name, code, sort_order")
+      .order("sort_order", { ascending: true });
+    if (error) throw error;
+    return (data ?? []) as Industry[];
+  },
+});
+
+export const companyCountsQuery = queryOptions({
+  queryKey: ["company-counts"],
+  queryFn: async (): Promise<Record<string, number>> => {
+    const { data, error } = await supabase.from("companies").select("industry_id");
+    if (error) throw error;
+    const counts: Record<string, number> = {};
+    for (const row of data ?? []) {
+      counts[row.industry_id as string] = (counts[row.industry_id as string] ?? 0) + 1;
+    }
+    return counts;
+  },
+});
+
+export const industryQuery = (id: string) =>
+  queryOptions({
+    queryKey: ["industry", id],
+    queryFn: async (): Promise<Industry | null> => {
+      const { data, error } = await supabase
+        .from("industries")
+        .select("id, name, code, sort_order")
+        .eq("id", id)
+        .maybeSingle();
+      if (error) throw error;
+      return (data as Industry) ?? null;
+    },
+  });
+
+export const companiesQuery = (industryId: string) =>
+  queryOptions({
+    queryKey: ["companies", industryId],
+    queryFn: async (): Promise<Company[]> => {
+      const { data, error } = await supabase
+        .from("companies")
+        .select("id, industry_id, name, tagline, profile, updated_at")
+        .eq("industry_id", industryId)
+        .order("name", { ascending: true });
+      if (error) throw error;
+      return (data ?? []).map((row) => ({
+        ...(row as unknown as Company),
+        profile: normalizeProfile((row as { profile: unknown }).profile),
+      }));
+    },
+  });
+
+export const companyQuery = (id: string) =>
+  queryOptions({
+    queryKey: ["company", id],
+    queryFn: async (): Promise<Company | null> => {
+      const { data, error } = await supabase
+        .from("companies")
+        .select("id, industry_id, name, tagline, profile, updated_at")
+        .eq("id", id)
+        .maybeSingle();
+      if (error) throw error;
+      if (!data) return null;
+      return {
+        ...(data as unknown as Company),
+        profile: normalizeProfile((data as { profile: unknown }).profile),
+      };
+    },
+  });
+
+export const settingsQuery = queryOptions({
+  queryKey: ["settings"],
+  queryFn: async (): Promise<SettingsMap> => {
+    const { data, error } = await supabase.from("app_settings").select("key, value");
+    if (error) throw error;
+    const map = {} as SettingsMap;
+    for (const key of SETTING_KEYS) map[key] = [];
+    for (const row of data ?? []) {
+      const key = row.key as SettingKey;
+      if (SETTING_KEYS.includes(key)) {
+        map[key] = Array.isArray(row.value) ? (row.value as string[]) : [];
+      }
+    }
+    return map;
+  },
+});
+
+export async function saveSetting(key: SettingKey, value: string[]) {
+  const { error } = await supabase
+    .from("app_settings")
+    .upsert({ key, value }, { onConflict: "key" });
+  if (error) throw error;
+}
+
+export async function upsertIndustry(input: {
+  id?: string;
+  name: string;
+  code: string;
+  sort_order: number;
+}) {
+  const { error } = await supabase.from("industries").upsert(input);
+  if (error) throw error;
+}
+
+export async function deleteIndustry(id: string) {
+  const { error } = await supabase.from("industries").delete().eq("id", id);
+  if (error) throw error;
+}
+
+export async function createCompany(input: {
+  industry_id: string;
+  name: string;
+  tagline: string;
+}) {
+  const { data, error } = await supabase.from("companies").insert(input).select("id").single();
+  if (error) throw error;
+  return data.id as string;
+}
+
+export async function saveCompany(input: {
+  id: string;
+  name: string;
+  tagline: string;
+  profile: CompanyProfile;
+}) {
+  const { error } = await supabase
+    .from("companies")
+    .update({ name: input.name, tagline: input.tagline, profile: input.profile as never })
+    .eq("id", input.id);
+  if (error) throw error;
+}
+
+export async function deleteCompany(id: string) {
+  const { error } = await supabase.from("companies").delete().eq("id", id);
+  if (error) throw error;
+}
