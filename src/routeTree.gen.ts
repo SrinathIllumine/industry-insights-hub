@@ -9,9 +9,16 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as IndustryIndustryIdRouteImport } from './routes/industry.$industryId'
+import { Route as CompanyCompanyIdRouteImport } from './routes/company.$companyId'
 
+const SettingsRoute = SettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
@@ -22,35 +29,60 @@ const IndustryIndustryIdRoute = IndustryIndustryIdRouteImport.update({
   path: '/industry/$industryId',
   getParentRoute: () => rootRouteImport,
 } as any)
+const CompanyCompanyIdRoute = CompanyCompanyIdRouteImport.update({
+  id: '/company/$companyId',
+  path: '/company/$companyId',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/settings': typeof SettingsRoute
+  '/company/$companyId': typeof CompanyCompanyIdRoute
   '/industry/$industryId': typeof IndustryIndustryIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/settings': typeof SettingsRoute
+  '/company/$companyId': typeof CompanyCompanyIdRoute
   '/industry/$industryId': typeof IndustryIndustryIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/settings': typeof SettingsRoute
+  '/company/$companyId': typeof CompanyCompanyIdRoute
   '/industry/$industryId': typeof IndustryIndustryIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/industry/$industryId'
+  fullPaths: '/' | '/settings' | '/company/$companyId' | '/industry/$industryId'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/industry/$industryId'
-  id: '__root__' | '/' | '/industry/$industryId'
+  to: '/' | '/settings' | '/company/$companyId' | '/industry/$industryId'
+  id:
+    | '__root__'
+    | '/'
+    | '/settings'
+    | '/company/$companyId'
+    | '/industry/$industryId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  SettingsRoute: typeof SettingsRoute
+  CompanyCompanyIdRoute: typeof CompanyCompanyIdRoute
   IndustryIndustryIdRoute: typeof IndustryIndustryIdRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/settings': {
+      id: '/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof SettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -65,11 +97,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndustryIndustryIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/company/$companyId': {
+      id: '/company/$companyId'
+      path: '/company/$companyId'
+      fullPath: '/company/$companyId'
+      preLoaderRoute: typeof CompanyCompanyIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  SettingsRoute: SettingsRoute,
+  CompanyCompanyIdRoute: CompanyCompanyIdRoute,
   IndustryIndustryIdRoute: IndustryIndustryIdRoute,
 }
 export const routeTree = rootRouteImport
