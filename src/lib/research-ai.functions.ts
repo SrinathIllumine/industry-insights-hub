@@ -76,7 +76,7 @@ export const structureResearchDump = createServerFn({ method: "POST" })
       return { ok: false as const, error: "AI is not configured for this project." };
     }
 
-    const system = `You convert messy company research notes (markdown dumps, pasted tables, bullet notes) into a strict JSON company research profile.
+    const system = `You convert messy company research notes (markdown or HTML exports, pasted tables, bullet notes) into a strict JSON company research profile.
 Return ONLY JSON matching this shape, no markdown fences:
 ${PROFILE_SHAPE}
 

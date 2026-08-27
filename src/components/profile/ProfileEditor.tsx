@@ -1,9 +1,10 @@
-import { useRef, useState } from "react";
-import { Image as ImageIcon, Loader2, Plus, Trash2, Upload, X } from "lucide-react";
+import { createContext, useContext, useRef, useState } from "react";
+import { FileCode, Image as ImageIcon, Loader2, Plus, Trash2, Upload, X } from "lucide-react";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
 
 import { cn } from "@/lib/utils";
+import { dataUrlToFile, isHtmlFile, parseHtmlDump } from "@/lib/html-import";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,6 +19,12 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { structureResearchDump } from "@/lib/research-ai.functions";
 import { uploadCompanyImage } from "@/lib/research-data";
 import type { SettingsMap } from "@/lib/research-data";
@@ -49,6 +56,10 @@ type Props = {
   onCancel: () => void;
 };
 
+/** Image URLs / data-URIs pulled from an imported HTML dump, so any ImageField
+ *  can offer them as a pick-from-document option. */
+const ImportedImagesContext = createContext<string[]>([]);
+
 export function ProfileEditor({
   name,
   tagline,
@@ -62,8 +73,10 @@ export function ProfileEditor({
   const setProfile = (profileNext: CompanyProfile) =>
     onChange({ name, tagline, profile: profileNext });
   const fin = profile.financials;
+  const [importedImages, setImportedImages] = useState<string[]>([]);
 
   return (
+    <ImportedImagesContext.Provider value={importedImages}>
     <div className="space-y-8">
       <div className="grid gap-4 md:grid-cols-2">
         <div className="space-y-1.5">
@@ -94,6 +107,9 @@ export function ProfileEditor({
             companyName={name}
             settings={settings}
             onParsed={(parsed) => setProfile(parsed)}
+            onImagesFound={(srcs) =>
+              setImportedImages((prev) => [...prev, ...srcs.filter((s) => !prev.includes(s))])
+            }
           />
         </TabsContent>
 
@@ -737,6 +753,7 @@ export function ProfileEditor({
         </Button>
       </div>
     </div>
+    </ImportedImagesContext.Provider>
   );
 }
 
@@ -744,24 +761,54 @@ function ImportPanel({
   companyName,
   settings,
   onParsed,
+  onImagesFound,
 }: {
   companyName: string;
   settings: SettingsMap;
   onParsed: (profile: CompanyProfile) => void;
+  onImagesFound?: (srcs: string[]) => void;
 }) {
   const [raw, setRaw] = useState("");
   const [busy, setBusy] = useState(false);
   const [dragging, setDragging] = useState(false);
+  const [imgCount, setImgCount] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const structure = useServerFn(structureResearchDump);
 
   const readFiles = async (files: FileList | null) => {
     if (!files?.length) return;
     const texts: string[] = [];
+    const foundImages: string[] = [];
+
     for (const file of Array.from(files)) {
-      texts.push(`--- ${file.name} ---\n${await file.text()}`);
+      const content = await file.text();
+      if (isHtmlFile(file)) {
+        const { text, images } = parseHtmlDump(content);
+        let block = `--- ${file.name} (HTML → text) ---\n${text}`;
+        const linkable = images.filter((im) => im.src.startsWith("http"));
+        if (linkable.length) {
+          block +=
+            `\n\n[Image URLs referenced in this document — use where relevant, e.g. benchmarkImageUrl / charts / engagementMapUrl]\n` +
+            linkable.map((im) => `- ${im.src}${im.alt ? ` (${im.alt})` : ""}`).join("\n");
+        }
+        if (images.length > linkable.length) {
+          block += `\n\n[${images.length - linkable.length} embedded image(s) also available to attach manually in the editor]`;
+        }
+        texts.push(block);
+        for (const im of images) foundImages.push(im.src);
+      } else {
+        texts.push(`--- ${file.name} ---\n${content}`);
+      }
     }
+
     setRaw((prev) => [prev, ...texts].filter(Boolean).join("\n\n"));
+    if (foundImages.length) {
+      setImgCount((n) => n + foundImages.length);
+      onImagesFound?.(foundImages);
+      toast.success(
+        `${foundImages.length} image${foundImages.length > 1 ? "s" : ""} found — pick them from any image field`,
+      );
+    }
   };
 
   const run = async () => {
@@ -769,11 +816,29 @@ function ImportPanel({
       toast.error("Paste or drop some research data first");
       return;
     }
+    // If the pasted text is itself a full HTML document, reduce it to text +
+    // image URLs first (same treatment as an uploaded .html file).
+    let payload = raw;
+    if (/^\s*(<!doctype html|<html[\s>]|<body[\s>])/i.test(raw)) {
+      const { text, images } = parseHtmlDump(raw);
+      const linkable = images.filter((im) => im.src.startsWith("http"));
+      payload =
+        text +
+        (linkable.length
+          ? `\n\n[Image URLs referenced in this document]\n` +
+            linkable.map((im) => `- ${im.src}`).join("\n")
+          : "");
+      if (images.length) {
+        setImgCount((n) => n + images.length);
+        onImagesFound?.(images.map((im) => im.src));
+      }
+    }
+
     setBusy(true);
     try {
       const result = await structure({
         data: {
-          raw,
+          raw: payload,
           companyName,
           themes: settings.themes,
           challengeTags: settings.challenge_tags,
@@ -813,19 +878,27 @@ function ImportPanel({
         }`}
       >
         <Upload className="mb-3 size-6 text-muted-foreground" />
-        <p className="text-sm font-medium">Drop markdown, text or CSV dumps here</p>
+        <p className="text-sm font-medium">Drop markdown, HTML, text or CSV dumps here</p>
         <p className="text-xs text-muted-foreground">
-          Anything works — Claude MD exports, meeting notes, pasted tables.
+          Anything works — Claude MD or HTML exports, meeting notes, pasted tables. Images inside
+          an HTML file are extracted for you to attach.
         </p>
         <input
           ref={inputRef}
           type="file"
           multiple
-          accept=".md,.markdown,.txt,.csv,.json"
+          accept=".md,.markdown,.txt,.csv,.json,.html,.htm,.xhtml"
           className="hidden"
           onChange={(e) => void readFiles(e.target.files)}
         />
       </div>
+      {imgCount > 0 ? (
+        <p className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+          <FileCode className="size-4" />
+          {imgCount} image{imgCount > 1 ? "s" : ""} extracted from HTML — open any image field and
+          choose “From imported HTML”.
+        </p>
+      ) : null}
 
       <Textarea
         rows={12}
@@ -893,6 +966,8 @@ function ImageField({
   const inputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [dragging, setDragging] = useState(false);
+  const [pickOpen, setPickOpen] = useState(false);
+  const importedImages = useContext(ImportedImagesContext);
 
   const handleFiles = async (files: FileList | null) => {
     const file = files?.[0];
@@ -902,6 +977,24 @@ function ImageField({
       const url = await uploadCompanyImage(file);
       onChange(url);
       toast.success("Image uploaded");
+    } catch (error) {
+      toast.error((error as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const pickImported = async (src: string) => {
+    setPickOpen(false);
+    if (!src.startsWith("data:")) {
+      onChange(src);
+      return;
+    }
+    setBusy(true);
+    try {
+      const url = await uploadCompanyImage(dataUrlToFile(src, "from-html"));
+      onChange(url);
+      toast.success("Image attached");
     } catch (error) {
       toast.error((error as Error).message);
     } finally {
@@ -971,6 +1064,39 @@ function ImageField({
           </Button>
         ) : null}
       </div>
+
+      {importedImages.length > 0 ? (
+        <Button variant="outline" size="sm" onClick={() => setPickOpen(true)}>
+          <ImageIcon className="size-4" /> From imported HTML ({importedImages.length})
+        </Button>
+      ) : null}
+
+      <Dialog open={pickOpen} onOpenChange={setPickOpen}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Pick an image from the imported HTML</DialogTitle>
+          </DialogHeader>
+          <div className="grid max-h-[65vh] grid-cols-2 gap-3 overflow-y-auto sm:grid-cols-3">
+            {importedImages.map((src, i) => (
+              <button
+                key={i}
+                type="button"
+                onClick={() => void pickImported(src)}
+                className="group overflow-hidden rounded-lg border border-border bg-card p-2 transition-colors hover:border-primary"
+              >
+                <img
+                  src={src}
+                  alt={`Imported image ${i + 1}`}
+                  className="h-28 w-full object-contain"
+                />
+                <span className="mt-1 block truncate text-[10px] text-muted-foreground">
+                  {src.startsWith("data:") ? "embedded image" : src}
+                </span>
+              </button>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
