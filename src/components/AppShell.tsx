@@ -9,17 +9,10 @@ export function AppShell({ children }: { children: ReactNode }) {
           <img
             src="/illumine-logo.svg"
             alt="Illumine"
-            className="size-9 shrink-0"
-            width={36}
-            height={36}
+            className="h-11 w-auto shrink-0 rounded dark:bg-white dark:p-1"
           />
-          <span className="flex flex-col leading-none">
-            <span className="font-display text-base font-extrabold uppercase tracking-[0.2em] text-foreground">
-              Illumine
-            </span>
-            <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-              Industry Research Engine
-            </span>
+          <span className="hidden border-l border-border pl-3 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground sm:block">
+            Industry Research Engine
           </span>
         </Link>
         <div className="flex items-center gap-6 text-sm font-medium text-muted-foreground">
