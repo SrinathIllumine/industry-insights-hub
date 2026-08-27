@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
+import { ChevronDown } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -16,25 +17,78 @@ const gradeClass: Record<Grade, string> = {
   none: "text-foreground",
 };
 
-function BlockHeading({ index, title }: { index: string; title: string }) {
+function CollapsibleCard({
+  index,
+  title,
+  defaultOpen = false,
+  children,
+}: {
+  index: string;
+  title: string;
+  defaultOpen?: boolean;
+  children: ReactNode;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
   return (
-    <h3 className="mb-6 flex items-center gap-2 font-display text-lg font-bold text-foreground">
-      <span className="size-2 rounded-full bg-primary" />
-      {index}. {title}
-    </h3>
+    <section className="overflow-hidden rounded-2xl border border-border bg-card">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className="flex w-full items-center justify-between gap-3 px-6 py-4 text-left transition-colors hover:bg-muted/50"
+      >
+        <h3 className="flex items-center gap-2 font-display text-lg font-bold text-foreground">
+          <span className="size-2 rounded-full bg-primary" />
+          {index}. {title}
+        </h3>
+        <ChevronDown
+          className={cn(
+            "size-5 shrink-0 text-muted-foreground transition-transform",
+            open && "rotate-180",
+          )}
+        />
+      </button>
+      {open ? <div className="border-t border-border px-6 pb-8 pt-6">{children}</div> : null}
+    </section>
   );
 }
 
+function BulletList({ items }: { items: string[] }) {
+  if (items.length === 0) {
+    return <p className="text-sm text-muted-foreground">Nothing captured yet.</p>;
+  }
+  return (
+    <ul className="space-y-2">
+      {items.map((item, i) => (
+        <li key={i} className="flex gap-3 text-sm leading-relaxed text-foreground">
+          <span className="mt-2 size-1.5 shrink-0 rounded-full bg-primary" />
+          <span className="whitespace-pre-line">{item}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+type VerticalPopup = {
+  v: Vertical;
+  kind: "stakeholders" | "engagementModel" | "contributions";
+};
+
+const POPUP_TITLE: Record<VerticalPopup["kind"], string> = {
+  stakeholders: "Stakeholders",
+  engagementModel: "Channel engagement model",
+  contributions: "Illumine's potential contributions",
+};
+
 export function ProfileView({ profile }: { profile: CompanyProfile }) {
   const [chartOpen, setChartOpen] = useState(false);
-  const [vertical, setVertical] = useState<{ v: Vertical; field: keyof Vertical } | null>(null);
+  const [popup, setPopup] = useState<VerticalPopup | null>(null);
   const fin = profile.financials;
 
   return (
-    <div className="space-y-8">
-      {/* Block 1: Financials */}
-      <section className="border-t border-border pt-10">
-        <BlockHeading index="I" title="Financial Performance" />
+    <div className="space-y-4">
+      {/* Block 1: Financials — open by default */}
+      <CollapsibleCard index="I" title="Financial Performance" defaultOpen>
         <div className="grid gap-12 lg:grid-cols-3">
           <div className="lg:col-span-2">
             <table className="w-full border-separate border-spacing-0 overflow-hidden rounded-xl border border-border text-sm">
@@ -121,11 +175,10 @@ export function ProfileView({ profile }: { profile: CompanyProfile }) {
             </button>
           </div>
         </div>
-      </section>
+      </CollapsibleCard>
 
       {/* Block 2: Challenges */}
-      <section className="border-t border-border pt-10">
-        <BlockHeading index="II" title="Overall Business Challenge / Aspiration" />
+      <CollapsibleCard index="II" title="Overall Business Challenge / Aspiration">
         {profile.challenges.length === 0 ? (
           <Empty text="No challenges captured yet." />
         ) : (
@@ -159,11 +212,10 @@ export function ProfileView({ profile }: { profile: CompanyProfile }) {
             ))}
           </div>
         )}
-      </section>
+      </CollapsibleCard>
 
       {/* Block 3: Verticals */}
-      <section className="border-t border-border pt-10">
-        <BlockHeading index="III" title="Business Verticals" />
+      <CollapsibleCard index="III" title="Business Verticals">
         {profile.verticals.length === 0 ? (
           <Empty text="No business verticals captured yet." />
         ) : (
@@ -192,26 +244,31 @@ export function ProfileView({ profile }: { profile: CompanyProfile }) {
                   </div>
                 ) : null}
                 <div className="space-y-2">
-                  <ClickIn label="Stakeholders" onClick={() => setVertical({ v, field: "stakeholders" })} />
+                  <ClickIn
+                    label="Stakeholders"
+                    count={v.stakeholders.length}
+                    onClick={() => setPopup({ v, kind: "stakeholders" })}
+                  />
                   <ClickIn
                     label="Channel engagement model"
-                    onClick={() => setVertical({ v, field: "engagementModel" })}
+                    count={v.engagementModel.length}
+                    onClick={() => setPopup({ v, kind: "engagementModel" })}
                   />
                   <ClickIn
                     label="Illumine's potential contributions"
+                    count={v.contributions.length}
                     highlight
-                    onClick={() => setVertical({ v, field: "contributions" })}
+                    onClick={() => setPopup({ v, kind: "contributions" })}
                   />
                 </div>
               </div>
             ))}
           </div>
         )}
-      </section>
+      </CollapsibleCard>
 
       {/* Block 4: Company-level research */}
-      <section className="border-t border-border pt-10">
-        <BlockHeading index="IV" title="Company-level Research" />
+      <CollapsibleCard index="IV" title="Company-level Research">
         {profile.initiatives.length === 0 ? (
           <Empty text="No initiatives captured yet." />
         ) : (
@@ -240,11 +297,10 @@ export function ProfileView({ profile }: { profile: CompanyProfile }) {
             </table>
           </div>
         )}
-      </section>
+      </CollapsibleCard>
 
       {/* Block 5: Partner contributions */}
-      <section className="border-t border-border pt-10">
-        <BlockHeading index="V" title="Partner Contributions" />
+      <CollapsibleCard index="V" title="Partner Contributions">
         {profile.partnerContributions.length === 0 ? (
           <Empty text="No partner engagements recorded yet." />
         ) : (
@@ -267,7 +323,7 @@ export function ProfileView({ profile }: { profile: CompanyProfile }) {
             ))}
           </div>
         )}
-      </section>
+      </CollapsibleCard>
 
       <Dialog open={chartOpen} onOpenChange={setChartOpen}>
         <DialogContent className="max-w-3xl">
@@ -289,21 +345,41 @@ export function ProfileView({ profile }: { profile: CompanyProfile }) {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={!!vertical} onOpenChange={(v) => !v && setVertical(null)}>
+      <Dialog open={!!popup} onOpenChange={(v) => !v && setPopup(null)}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>
-              {vertical?.v.name} —{" "}
-              {vertical?.field === "stakeholders"
-                ? "Stakeholders"
-                : vertical?.field === "engagementModel"
-                  ? "Channel engagement model"
-                  : "Illumine's potential contributions"}
+              {popup?.v.name} — {popup ? POPUP_TITLE[popup.kind] : ""}
             </DialogTitle>
           </DialogHeader>
-          <p className="whitespace-pre-line text-sm leading-relaxed text-foreground">
-            {(vertical ? (vertical.v[vertical.field] as string) : "") || "Nothing captured yet."}
-          </p>
+
+          {popup?.kind === "stakeholders" ? <BulletList items={popup.v.stakeholders} /> : null}
+          {popup?.kind === "engagementModel" ? (
+            <BulletList items={popup.v.engagementModel} />
+          ) : null}
+          {popup?.kind === "contributions" ? (
+            popup.v.contributions.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                No models selected for this vertical yet.
+              </p>
+            ) : (
+              <div className="space-y-4">
+                {popup.v.contributions.map((c, i) => (
+                  <div key={i} className="rounded-xl border border-border bg-muted/40 p-4">
+                    <p className="font-display text-base font-bold text-foreground">
+                      {c.model || "Model (unnamed)"}
+                    </p>
+                    <p className="mt-3 label-caps">
+                      How it can be configured for the company
+                    </p>
+                    <p className="mt-1 whitespace-pre-line text-sm leading-relaxed text-foreground">
+                      {c.configuration || "Not captured yet."}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )
+          ) : null}
         </DialogContent>
       </Dialog>
     </div>
@@ -312,10 +388,12 @@ export function ProfileView({ profile }: { profile: CompanyProfile }) {
 
 function ClickIn({
   label,
+  count,
   onClick,
   highlight,
 }: {
   label: string;
+  count?: number;
   onClick: () => void;
   highlight?: boolean;
 }) {
@@ -328,7 +406,14 @@ function ClickIn({
         highlight && "bg-good-soft text-good-foreground hover:bg-good-soft/80 font-bold",
       )}
     >
-      {label}
+      <span>
+        {label}
+        {typeof count === "number" && count > 0 ? (
+          <span className="ml-2 rounded-full bg-background/60 px-1.5 py-0.5 text-[10px] font-bold">
+            {count}
+          </span>
+        ) : null}
+      </span>
       <span aria-hidden>→</span>
     </Button>
   );

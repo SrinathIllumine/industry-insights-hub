@@ -6,11 +6,20 @@ export function AppShell({ children }: { children: ReactNode }) {
     <div className="min-h-screen bg-background pb-24">
       <nav className="sticky top-0 z-40 flex items-center justify-between border-b border-border bg-card/80 px-6 py-4 backdrop-blur-md md:px-8">
         <Link to="/" className="flex items-center gap-3">
-          <span className="flex size-8 items-center justify-center rounded-lg bg-primary">
-            <span className="size-3 rounded-full border-2 border-primary-foreground" />
-          </span>
-          <span className="font-display text-lg font-bold uppercase tracking-tight text-foreground">
-            Industry Research Engine
+          <img
+            src="/illumine-logo.svg"
+            alt="Illumine"
+            className="size-9 shrink-0"
+            width={36}
+            height={36}
+          />
+          <span className="flex flex-col leading-none">
+            <span className="font-display text-base font-extrabold uppercase tracking-[0.2em] text-foreground">
+              Illumine
+            </span>
+            <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+              Industry Research Engine
+            </span>
           </span>
         </Link>
         <div className="flex items-center gap-6 text-sm font-medium text-muted-foreground">

@@ -7,6 +7,7 @@ const inputSchema = z.object({
   themes: z.array(z.string()).default([]),
   challengeTags: z.array(z.string()).default([]),
   financialTags: z.array(z.string()).default([]),
+  illumineModels: z.array(z.string()).default([]),
 });
 
 const PROFILE_SHAPE = `{
@@ -30,7 +31,17 @@ const PROFILE_SHAPE = `{
     { "theme": "one of the allowed themes", "problem": "the actual problem", "quote": "stakeholder quote or empty", "quoteBy": "role of the person or empty", "tag": "one of the allowed challenge tags" }
   ],
   "verticals": [
-    { "name": "BU name", "description": "one-liner", "basicDetails": "short bullet-ish text", "revenueDetails": "revenue and share", "stakeholders": "text", "engagementModel": "text", "contributions": "Illumine's potential contributions" }
+    {
+      "name": "BU name",
+      "description": "one-liner",
+      "basicDetails": "short bullet-ish text",
+      "revenueDetails": "revenue and share",
+      "stakeholders": ["one readable bullet per stakeholder or group, include role/context and any numbers"],
+      "engagementModel": ["one readable bullet per channel / step of the channel engagement model, keep numbers legible"],
+      "contributions": [
+        { "model": "one of the allowed Illumine models, or a new short model name", "configuration": "how this model could be configured for this company" }
+      ]
+    }
   ],
   "initiatives": [
     { "area": "", "category": "", "initiative": "", "whatItDoes": "", "howItIsDone": "" }
@@ -58,7 +69,9 @@ Rules:
 - Each metric's values and grades arrays must have exactly the same length as "years".
 - Allowed challenge themes (pick the closest one, never invent new): ${data.themes.join(" | ") || "(none configured)"}
 - Allowed challenge tags: ${data.challengeTags.join(" | ") || "(none configured)"}
-- Allowed financial verdict tags: ${data.financialTags.join(" | ") || "(none configured)"}`;
+- Allowed financial verdict tags: ${data.financialTags.join(" | ") || "(none configured)"}
+- Allowed Illumine models for vertical contributions (prefer these, but a new short model name is allowed): ${data.illumineModels.join(" | ") || "(none configured)"}
+- "stakeholders" and "engagementModel" must be arrays of short readable bullet strings, never a single blob.`;
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",

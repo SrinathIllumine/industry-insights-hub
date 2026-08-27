@@ -26,15 +26,83 @@ export type Challenge = {
   tag: string;
 };
 
+/** One Illumine model / solution mapped to a business vertical, with a note on
+ *  how it could be configured for this specific company. */
+export type IllumineContribution = {
+  model: string;
+  configuration: string;
+};
+
 export type Vertical = {
   name: string;
   description: string;
   basicDetails: string;
   revenueDetails: string;
-  stakeholders: string;
-  engagementModel: string;
-  contributions: string;
+  /** Readable bullet points — one stakeholder / group per line. */
+  stakeholders: string[];
+  /** Readable bullet points — channel engagement model, keep numbers legible. */
+  engagementModel: string[];
+  contributions: IllumineContribution[];
 };
+
+export const emptyVertical = (): Vertical => ({
+  name: "",
+  description: "",
+  basicDetails: "",
+  revenueDetails: "",
+  stakeholders: [],
+  engagementModel: [],
+  contributions: [],
+});
+
+/** Accepts a stored string[] or a legacy newline string and returns clean bullets. */
+export function toBullets(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value.map((x) => String(x).trim()).filter(Boolean);
+  }
+  if (typeof value === "string") {
+    return value
+      .split(/\r?\n/)
+      .map((s) => s.replace(/^\s*[-*•]\s*/, "").trim())
+      .filter(Boolean);
+  }
+  return [];
+}
+
+/** Accepts stored IllumineContribution[] or a legacy free-text string. */
+export function toContributions(value: unknown): IllumineContribution[] {
+  if (Array.isArray(value)) {
+    return value
+      .map((x) => {
+        if (x && typeof x === "object") {
+          const o = x as Record<string, unknown>;
+          return {
+            model: String(o["model"] ?? "").trim(),
+            configuration: String(o["configuration"] ?? o["config"] ?? "").trim(),
+          };
+        }
+        return { model: String(x).trim(), configuration: "" };
+      })
+      .filter((c) => c.model || c.configuration);
+  }
+  if (typeof value === "string" && value.trim()) {
+    return [{ model: "", configuration: value.trim() }];
+  }
+  return [];
+}
+
+function normalizeVertical(raw: unknown): Vertical {
+  const v = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
+  return {
+    name: String(v["name"] ?? ""),
+    description: String(v["description"] ?? ""),
+    basicDetails: String(v["basicDetails"] ?? ""),
+    revenueDetails: String(v["revenueDetails"] ?? ""),
+    stakeholders: toBullets(v["stakeholders"]),
+    engagementModel: toBullets(v["engagementModel"]),
+    contributions: toContributions(v["contributions"]),
+  };
+}
 
 export type Initiative = {
   area: string;
@@ -115,7 +183,7 @@ export function normalizeProfile(raw: unknown): CompanyProfile {
   return {
     financials: { ...fin, years, metrics },
     challenges: Array.isArray(p.challenges) ? p.challenges : [],
-    verticals: Array.isArray(p.verticals) ? p.verticals : [],
+    verticals: Array.isArray(p.verticals) ? p.verticals.map(normalizeVertical) : [],
     initiatives: Array.isArray(p.initiatives) ? p.initiatives : [],
     partnerContributions: Array.isArray(p.partnerContributions) ? p.partnerContributions : [],
   };

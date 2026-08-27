@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { Loader2, Plus, Trash2, Upload } from "lucide-react";
+import { Loader2, Plus, Trash2, Upload, X } from "lucide-react";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
 
@@ -15,12 +15,15 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Checkbox } from "@/components/ui/checkbox";
 import { structureResearchDump } from "@/lib/research-ai.functions";
 import type { SettingsMap } from "@/lib/research-data";
 import {
+  emptyVertical,
   normalizeProfile,
   type CompanyProfile,
   type Grade,
+  type IllumineContribution,
   type Vertical,
 } from "@/lib/research-types";
 
@@ -407,23 +410,25 @@ export function ProfileEditor({
                     onChange={(x) => update({ revenueDetails: x })}
                   />
                 </div>
-                <div className="grid gap-4 md:grid-cols-3">
-                  <TextField
+                <div className="grid gap-6 md:grid-cols-2">
+                  <BulletsField
                     label="Stakeholders"
-                    value={v.stakeholders}
+                    help="One stakeholder or group per bullet — include role, context and any numbers."
+                    items={v.stakeholders}
                     onChange={(x) => update({ stakeholders: x })}
                   />
-                  <TextField
+                  <BulletsField
                     label="Channel engagement model"
-                    value={v.engagementModel}
+                    help="One step / channel per bullet. Keep figures readable, e.g. “~12,000 retailers across 4 zones”."
+                    items={v.engagementModel}
                     onChange={(x) => update({ engagementModel: x })}
                   />
-                  <TextField
-                    label="Illumine's potential contributions"
-                    value={v.contributions}
-                    onChange={(x) => update({ contributions: x })}
-                  />
                 </div>
+                <ContributionsField
+                  models={settings.illumine_models}
+                  items={v.contributions}
+                  onChange={(x) => update({ contributions: x })}
+                />
               </RowCard>
             );
           })}
@@ -432,18 +437,7 @@ export function ProfileEditor({
             onClick={() =>
               setProfile({
                 ...profile,
-                verticals: [
-                  ...profile.verticals,
-                  {
-                    name: "",
-                    description: "",
-                    basicDetails: "",
-                    revenueDetails: "",
-                    stakeholders: "",
-                    engagementModel: "",
-                    contributions: "",
-                  },
-                ],
+                verticals: [...profile.verticals, emptyVertical()],
               })
             }
           >
@@ -634,6 +628,7 @@ function ImportPanel({
           themes: settings.themes,
           challengeTags: settings.challenge_tags,
           financialTags: settings.financial_tags,
+          illumineModels: settings.illumine_models,
         },
       });
       if (!result.ok) {
@@ -732,6 +727,176 @@ function TextField({
     <div className="space-y-1.5">
       <Label>{label}</Label>
       <Textarea rows={3} value={value} onChange={(e) => onChange(e.target.value)} />
+    </div>
+  );
+}
+
+function BulletsField({
+  label,
+  help,
+  items,
+  onChange,
+}: {
+  label: string;
+  help?: string;
+  items: string[];
+  onChange: (next: string[]) => void;
+}) {
+  return (
+    <div className="space-y-2">
+      <Label>{label}</Label>
+      {help ? <p className="text-xs text-muted-foreground">{help}</p> : null}
+      <div className="space-y-2">
+        {items.map((item, i) => (
+          <div key={i} className="flex items-start gap-2">
+            <span className="mt-3 size-1.5 shrink-0 rounded-full bg-primary" />
+            <Textarea
+              rows={2}
+              value={item}
+              onChange={(e) => {
+                const next = [...items];
+                next[i] = e.target.value;
+                onChange(next);
+              }}
+            />
+            <Button
+              size="icon"
+              variant="ghost"
+              onClick={() => onChange(items.filter((_, x) => x !== i))}
+            >
+              <Trash2 className="size-4 text-destructive" />
+            </Button>
+          </div>
+        ))}
+        {items.length === 0 ? (
+          <p className="text-xs text-muted-foreground">No bullets yet.</p>
+        ) : null}
+      </div>
+      <Button variant="outline" size="sm" onClick={() => onChange([...items, ""])}>
+        <Plus className="size-4" /> Add bullet
+      </Button>
+    </div>
+  );
+}
+
+function ContributionsField({
+  models,
+  items,
+  onChange,
+}: {
+  models: string[];
+  items: IllumineContribution[];
+  onChange: (next: IllumineContribution[]) => void;
+}) {
+  const [custom, setCustom] = useState("");
+  const selected = new Set(items.map((c) => c.model));
+
+  const toggle = (model: string) => {
+    if (selected.has(model)) {
+      onChange(items.filter((c) => c.model !== model));
+    } else {
+      onChange([...items, { model, configuration: "" }]);
+    }
+  };
+
+  const addCustom = () => {
+    const name = custom.trim();
+    if (!name) return;
+    if (selected.has(name)) {
+      toast.error("That model is already added");
+      return;
+    }
+    onChange([...items, { model: name, configuration: "" }]);
+    setCustom("");
+  };
+
+  const setConfig = (model: string, configuration: string) => {
+    onChange(items.map((c) => (c.model === model ? { ...c, configuration } : c)));
+  };
+
+  const extraSelected = items.filter((c) => c.model && !models.includes(c.model));
+
+  return (
+    <div className="space-y-4 rounded-xl border border-border bg-muted/30 p-4">
+      <div>
+        <Label>Illumine's potential contributions</Label>
+        <p className="text-xs text-muted-foreground">
+          Select the models / solutions that could serve this vertical. New models can also be
+          added — and maintained centrally under Settings.
+        </p>
+      </div>
+
+      <div className="grid gap-2 sm:grid-cols-2">
+        {models.map((model) => (
+          <label
+            key={model}
+            className="flex cursor-pointer items-start gap-2 rounded-lg border border-border bg-card p-3 text-sm"
+          >
+            <Checkbox
+              className="mt-0.5"
+              checked={selected.has(model)}
+              onCheckedChange={() => toggle(model)}
+            />
+            <span>{model}</span>
+          </label>
+        ))}
+      </div>
+
+      <div className="flex gap-2">
+        <Input
+          placeholder="Add a new model / solution"
+          value={custom}
+          onChange={(e) => setCustom(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              addCustom();
+            }
+          }}
+        />
+        <Button variant="outline" onClick={addCustom}>
+          <Plus className="size-4" /> Add
+        </Button>
+      </div>
+
+      {extraSelected.length > 0 ? (
+        <div className="flex flex-wrap gap-2">
+          {extraSelected.map((c) => (
+            <span
+              key={c.model}
+              className="inline-flex items-center gap-1 rounded-full bg-primary px-3 py-1 text-xs font-semibold text-primary-foreground"
+            >
+              {c.model}
+              <button
+                type="button"
+                onClick={() => onChange(items.filter((x) => x.model !== c.model))}
+                aria-label={`Remove ${c.model}`}
+              >
+                <X className="size-3" />
+              </button>
+            </span>
+          ))}
+        </div>
+      ) : null}
+
+      {items.length > 0 ? (
+        <div className="space-y-4 border-t border-border pt-4">
+          {items.map((c, ci) => (
+            <div key={c.model || ci} className="space-y-1.5">
+              <Label className="text-sm font-semibold">
+                {c.model || "Model (unnamed)"} — How do you think it can be configured for the
+                company?
+              </Label>
+              <Textarea
+                rows={3}
+                value={c.configuration}
+                onChange={(e) => setConfig(c.model, e.target.value)}
+                placeholder="Describe how this model would be adapted / configured for this company and vertical…"
+              />
+            </div>
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }

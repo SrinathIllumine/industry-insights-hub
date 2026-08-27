@@ -13,10 +13,50 @@ export const SETTING_KEYS = [
   "financial_tags",
   "initiative_areas",
   "engagement_stages",
+  "illumine_models",
 ] as const;
 
 export type SettingKey = (typeof SETTING_KEYS)[number];
 export type SettingsMap = Record<SettingKey, string[]>;
+
+/** Used when a settings row has never been created (e.g. before the seed
+ *  migration runs), so the editor dropdowns are never empty. */
+export const SETTING_DEFAULTS: SettingsMap = {
+  themes: [
+    "Preserving market leadership in a specific product/business line",
+    "Dealing with intense competition and potential loss of market position & reduced morale",
+    "Increased funding for aggressive growth/expansion of business - more dealers/network growth",
+    "Increase production capacity in new areas/locations leading to more dealers",
+    "Building future-ready talent and leadership pipeline",
+    "Driving digital and technology transformation",
+  ],
+  challenge_tags: ["Company-wide business problem", "BU-specific"],
+  financial_tags: ["High performing", "Moderate performing", "Low performing"],
+  initiative_areas: [
+    "Digital Transformation",
+    "Sustainability",
+    "Talent & Capability",
+    "Customer Experience",
+    "Manufacturing & Operations",
+  ],
+  engagement_stages: [
+    "Initial conversation",
+    "Proposal",
+    "Pilot",
+    "Delivery",
+    "Post-delivery review",
+  ],
+  illumine_models: [
+    "ME-Retailer Engagement App",
+    "Market Discovery Tool",
+    "Business Counselling Toolbox",
+    "Scalable Business Coaching Toolbox",
+    "Sustainable Learning System (for rapid upgradation)",
+    "Flashpoints Management System",
+    "Best Practices Toolbox",
+    "Customer Discovery / Counselling App",
+  ],
+};
 
 export const SETTING_LABELS: Record<SettingKey, { title: string; help: string }> = {
   themes: {
@@ -38,6 +78,10 @@ export const SETTING_LABELS: Record<SettingKey, { title: string; help: string }>
   engagement_stages: {
     title: "Engagement stages",
     help: "Stages used to track partner contributions.",
+  },
+  illumine_models: {
+    title: "Illumine models & solutions",
+    help: "Predefined models selectable under a vertical's “Illumine's potential contributions”. New models can be added here as they emerge.",
   },
 };
 
@@ -120,13 +164,19 @@ export const settingsQuery = queryOptions({
   queryFn: async (): Promise<SettingsMap> => {
     const { data, error } = await supabase.from("app_settings").select("key, value");
     if (error) throw error;
+    const seen = new Set<SettingKey>();
     const map = {} as SettingsMap;
     for (const key of SETTING_KEYS) map[key] = [];
     for (const row of data ?? []) {
       const key = row.key as SettingKey;
       if (SETTING_KEYS.includes(key)) {
         map[key] = Array.isArray(row.value) ? (row.value as string[]) : [];
+        seen.add(key);
       }
+    }
+    // Fall back to sensible defaults for any list that has never been saved.
+    for (const key of SETTING_KEYS) {
+      if (!seen.has(key)) map[key] = [...SETTING_DEFAULTS[key]];
     }
     return map;
   },
