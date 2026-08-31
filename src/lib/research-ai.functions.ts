@@ -33,28 +33,35 @@ const PROFILE_SHAPE = `{
   },
   "challenges": [
     {
-      "theme": "one of the allowed themes",
-      "problem": "a thorough, plain-language explanation (3-6 sentences) that ANY reader can understand: what the problem is, why it exists, what is at stake, and how it is playing out",
-      "quote": "a VERBATIM stakeholder quote from the input that is directly relevant to THIS problem; empty string if none is genuinely relevant — never force-fit",
-      "quoteBy": "role/name of the person quoted, or empty",
+      "theme": "one of the allowed themes; if a problem genuinely does not fit any, keep the closest and say so in the problem text",
+      "problem": "a thorough, plain-language explanation (4-8 sentences) that ANY reader can understand: what is actually happening, why it exists, what is at stake, how it is playing out, and the leadership response",
+      "status": "one short line — where this stands right now (e.g. 'Actively defending; share recovering from 36% to 46%')",
+      "quotes": [
+        { "text": "VERBATIM quote from the input, directly about THIS problem", "by": "name / role of the speaker", "sourceLabel": "publication", "sourceUrl": "https URL for this quote" }
+      ],
       "tag": "one of the allowed challenge tags",
-      "sources": [ { "label": "publication / doc name", "url": "https URL the problem or quote was pulled from" } ]
+      "sources": [ { "label": "publication / doc name", "url": "https URL a key claim was pulled from" } ]
     }
   ],
+  "verticalsNote": "optional framing note about how the verticals are defined / what is / isn't a standard BU",
   "verticals": [
     {
-      "name": "BU name",
+      "name": "BU / vertical name",
       "description": "one-liner",
       "basicDetails": "short bullet-ish text",
-      "revenueDetails": "optional longer revenue narrative for depth",
-      "revenueValue": "headline revenue figure for this vertical, e.g. INR 4,200 Cr (FY24)",
+      "shareOfRevenue": "e.g. ~20% of group revenue",
+      "revenueDetails": "the sub-line detail, e.g. 'FY2025-26 revenue, consolidated · PAT INR 3,030 cr · 4,35,227 units sold'",
+      "revenueValue": "headline revenue figure for this vertical, e.g. INR 83,855 cr",
       "revenueGrowth": "growth, e.g. +12% YoY or 3-yr CAGR 9%",
-      "revenueContributors": [ { "name": "product / service / element of this vertical", "detail": "share or value or why it matters" } ],
-      "stakeholders": ["one readable bullet per stakeholder or group involved in the retail engagement, include role/context and any numbers"],
-      "engagementModel": ["one readable bullet per channel / step of the channel engagement model, keep numbers legible"],
-      "engagementMapUrl": "https URL of a stakeholder engagement-map image if present, else empty",
-      "channelStats": [ { "label": "e.g. Dealers / Dealer executives / Salesforce / Distributors / Retail touchpoints", "value": "the number, e.g. ~14,000" } ],
-      "dealerChannelTypes": ["type of dealer or channel active in this vertical, e.g. Exclusive brand outlets, Multi-brand dealers, Project/institutional, Rural sub-dealers"],
+      "revenueInsight": "the non-obvious insight about what really drives this vertical's revenue (2-4 sentences)",
+      "revenueContributors": [ { "name": "product / service / element", "detail": "share or value or why it matters" } ],
+      "mixChartCaption": "1-2 sentences on what a product/volume/revenue mix chart for this vertical shows (leave imageUrl-type fields out; the app attaches the image)",
+      "channelModelName": "e.g. Dealer Franchise Model (dominant channel)",
+      "stakeholders": ["one bullet per main decision-making stakeholder — name — role — what they decide"],
+      "engagementModel": ["one bullet per step / mechanism of how the channel engagement works"],
+      "channelStats": [ { "label": "e.g. Dealers / Dealer sales executives per dealership / Company sales & commercial workforce / Retail outlets", "value": "the number incl. any 'est.'/'confirmed' qualifier, e.g. ~750 est." } ],
+      "channelMethodology": "the methodology paragraph explaining how estimated numbers were derived, if present",
+      "dealerChannelTypes": ["type of dealer or channel active in this vertical"],
       "contributions": [
         { "model": "one of the allowed Illumine models, or a new short model name", "configuration": "how this model could be configured for this company" }
       ]
@@ -88,8 +95,10 @@ Rules:
 - Each metric's values and grades arrays must have exactly the same length as "years".
 - financials.narrative must be exactly two sentences and must include a forward-looking view.
 - challenges[].problem must be a detailed multi-sentence explanation, not a headline.
-- challenges[].quote must be verbatim from the input AND clearly about that same problem. If nothing fits, leave it empty rather than force-fitting.
-- Only include a source in "sources" if a real URL or named document appears in the input.
+- challenges[].quotes: include every verbatim quote in the input that is clearly about that same problem (there may be several, or none). Never force-fit a quote to the wrong problem. Attach each quote's own source URL when the input shows one.
+- Do NOT put image URLs or data URIs anywhere. The app attaches chart / map / engagement-map images itself — you only write their titles and captions.
+- Only include a source if a real URL or named document appears in the input.
+- Preserve depth: revenueInsight, channelMethodology and verticalsNote should carry the full nuance from the input, not a summary.
 - Allowed challenge themes (pick the closest one, never invent new): ${data.themes.join(" | ") || "(none configured)"}
 - Allowed challenge tags: ${data.challengeTags.join(" | ") || "(none configured)"}
 - Allowed financial verdict tags: ${data.financialTags.join(" | ") || "(none configured)"}

@@ -13,6 +13,7 @@ import type {
   CompanyProfile,
   FinancialChart,
   Grade,
+  Quote,
   Vertical,
 } from "@/lib/research-types";
 
@@ -22,6 +23,8 @@ const gradeClass: Record<Grade, string> = {
   bad: "bg-bad-soft text-bad-foreground font-semibold",
   none: "text-foreground",
 };
+
+/* ---------- shared bits ---------- */
 
 function CollapsibleCard({
   index,
@@ -60,9 +63,7 @@ function CollapsibleCard({
 }
 
 function BulletList({ items }: { items: string[] }) {
-  if (items.length === 0) {
-    return <p className="text-sm text-muted-foreground">—</p>;
-  }
+  if (items.length === 0) return <p className="text-sm text-muted-foreground">—</p>;
   return (
     <ul className="space-y-2">
       {items.map((item, i) => (
@@ -84,57 +85,76 @@ function SubCard({ title, children }: { title: string; children: ReactNode }) {
   );
 }
 
-function ChartCard({ chart }: { chart: FinancialChart }) {
+function Callout({ label, text }: { label: string; text: string }) {
+  return (
+    <div className="rounded-xl border-l-4 border-primary bg-muted/50 p-4">
+      <span className="label-caps">{label}</span>
+      <p className="mt-1 whitespace-pre-line text-[15px] leading-relaxed text-foreground">{text}</p>
+    </div>
+  );
+}
+
+/** Image thumbnail + caption that opens a zoom dialog. Renders nothing without an image. */
+function ImageFigure({
+  src,
+  title,
+  caption,
+  className,
+}: {
+  src: string;
+  title?: string;
+  caption?: string;
+  className?: string;
+}) {
   const [zoom, setZoom] = useState(false);
+  if (!src) return null;
   return (
     <>
-      <figure className="overflow-hidden rounded-xl border border-border bg-card">
-        {chart.imageUrl ? (
-          <button
-            type="button"
-            onClick={() => setZoom(true)}
-            className="block w-full cursor-zoom-in bg-card"
-          >
-            <img
-              src={chart.imageUrl}
-              alt={chart.title || "Financial chart"}
-              className="max-h-72 w-full object-contain p-3"
-            />
-          </button>
+      <figure className={cn("overflow-hidden rounded-xl border border-border bg-card", className)}>
+        <button
+          type="button"
+          onClick={() => setZoom(true)}
+          className="block w-full cursor-zoom-in bg-card"
+        >
+          <img
+            src={src}
+            alt={title || "Chart"}
+            className="max-h-72 w-full object-contain p-3"
+          />
+        </button>
+        {title || caption ? (
+          <figcaption className="space-y-1 border-t border-border p-4">
+            {title ? (
+              <p className="font-display text-sm font-bold text-foreground">{title}</p>
+            ) : null}
+            {caption ? (
+              <p className="text-sm leading-relaxed text-muted-foreground">{caption}</p>
+            ) : null}
+          </figcaption>
         ) : null}
-        <figcaption className="space-y-1 border-t border-border p-4">
-          {chart.title ? (
-            <p className="font-display text-sm font-bold text-foreground">{chart.title}</p>
-          ) : null}
-          {chart.caption ? (
-            <p className="text-sm leading-relaxed text-muted-foreground">{chart.caption}</p>
-          ) : null}
-        </figcaption>
       </figure>
 
       <Dialog open={zoom} onOpenChange={setZoom}>
         <DialogContent className="max-w-4xl">
           <DialogHeader>
-            <DialogTitle>{chart.title || "Financial chart"}</DialogTitle>
+            <DialogTitle>{title || "Chart"}</DialogTitle>
           </DialogHeader>
           <img
-            src={chart.imageUrl}
-            alt={chart.title || "Financial chart"}
-            className="max-h-[70vh] w-full rounded-xl border border-border bg-card object-contain p-2"
+            src={src}
+            alt={title || "Chart"}
+            className="max-h-[72vh] w-full rounded-xl border border-border bg-card object-contain p-2"
           />
-          {chart.caption ? (
-            <p className="text-sm text-muted-foreground">{chart.caption}</p>
-          ) : null}
+          {caption ? <p className="text-sm text-muted-foreground">{caption}</p> : null}
         </DialogContent>
       </Dialog>
     </>
   );
 }
 
-function ExpandableText({ text, clampLines = 4 }: { text: string; clampLines?: number }) {
+function ExpandableText({ text }: { text: string }) {
   const [open, setOpen] = useState(false);
   const [dialog, setDialog] = useState(false);
-  const isLong = text.length > 320 || text.split(/\r?\n/).length > clampLines;
+  const isLong = text.length > 320 || text.split(/\r?\n/).length > 4;
 
   return (
     <div>
@@ -179,35 +199,58 @@ function ExpandableText({ text, clampLines = 4 }: { text: string; clampLines?: n
   );
 }
 
+function SourceChip({ label, url }: { label: string; url: string }) {
+  if (url) {
+    return (
+      <a
+        href={url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="inline-flex items-center gap-1 rounded-full border border-border bg-card px-3 py-1 text-xs font-medium text-foreground hover:border-primary"
+      >
+        <ExternalLink className="size-3" />
+        {label}
+      </a>
+    );
+  }
+  return (
+    <span className="rounded-full border border-border bg-card px-3 py-1 text-xs text-muted-foreground">
+      {label}
+    </span>
+  );
+}
+
 function Sources({ sources }: { sources: Challenge["sources"] }) {
-  if (!sources || sources.length === 0) return null;
+  if (!sources.length) return null;
   return (
     <div className="mt-4 flex flex-wrap items-center gap-2">
       <span className="label-caps">Sources</span>
-      {sources.map((s, i) =>
-        s.url ? (
-          <a
-            key={i}
-            href={s.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 rounded-full border border-border bg-card px-3 py-1 text-xs font-medium text-foreground hover:border-primary"
-          >
-            <ExternalLink className="size-3" />
-            {s.label}
-          </a>
-        ) : (
-          <span
-            key={i}
-            className="rounded-full border border-border bg-card px-3 py-1 text-xs text-muted-foreground"
-          >
-            {s.label}
-          </span>
-        ),
-      )}
+      {sources.map((s, i) => (
+        <SourceChip key={i} label={s.label} url={s.url} />
+      ))}
     </div>
   );
 }
+
+function QuoteBlock({ q }: { q: Quote }) {
+  return (
+    <blockquote className="mt-4 border-l-2 border-border pl-4 text-muted-foreground">
+      <p className="italic">“{q.text}”</p>
+      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
+        {q.by ? (
+          <cite className="text-xs font-bold uppercase not-italic text-muted-foreground">
+            — {q.by}
+          </cite>
+        ) : null}
+        {q.sourceUrl || q.sourceLabel ? (
+          <SourceChip label={q.sourceLabel || "source"} url={q.sourceUrl} />
+        ) : null}
+      </div>
+    </blockquote>
+  );
+}
+
+/* ---------- main view ---------- */
 
 type VerticalPopup = {
   v: Vertical;
@@ -215,7 +258,7 @@ type VerticalPopup = {
 };
 
 const POPUP_TITLE: Record<VerticalPopup["kind"], string> = {
-  stakeholders: "Stakeholders",
+  stakeholders: "Decision-making stakeholders",
   engagementModel: "Channel engagement model",
   contributions: "Illumine's potential contributions",
 };
@@ -226,7 +269,8 @@ export function ProfileView({ profile }: { profile: CompanyProfile }) {
   const fin = profile.financials;
 
   const charts: FinancialChart[] = [
-    ...(fin.benchmarkImageUrl || fin.benchmarkNote
+    ...fin.charts.filter((c) => c.imageUrl),
+    ...(fin.benchmarkImageUrl
       ? [
           {
             title: "Where the company stands in the industry",
@@ -235,15 +279,15 @@ export function ProfileView({ profile }: { profile: CompanyProfile }) {
           },
         ]
       : []),
-    ...fin.charts,
   ];
+  const hasTable = fin.metrics.some((m) => m.values.some(Boolean));
 
   return (
     <div className="space-y-4">
-      {/* Block 1: Financials — open by default */}
+      {/* Block I — Financials */}
       <CollapsibleCard index="I" title="Financial Performance" defaultOpen>
         <div className="grid gap-4 sm:grid-cols-3">
-          <div className="rounded-2xl bg-primary p-6 text-primary-foreground sm:col-span-1">
+          <div className="rounded-2xl bg-primary p-6 text-primary-foreground">
             <span className="text-[11px] font-bold uppercase tracking-widest opacity-70">
               Overall verdict
             </span>
@@ -271,33 +315,32 @@ export function ProfileView({ profile }: { profile: CompanyProfile }) {
         {charts.length > 0 ? (
           <div className="mt-6 grid gap-6 md:grid-cols-2">
             {charts.map((chart, i) => (
-              <ChartCard key={i} chart={chart} />
+              <ImageFigure
+                key={i}
+                src={chart.imageUrl}
+                title={chart.title}
+                caption={chart.caption}
+              />
             ))}
           </div>
-        ) : (
-          <p className="mt-6 rounded-xl border border-dashed border-border p-6 text-sm text-muted-foreground">
-            No charts added yet — add chart images with a caption in the editor to drive the
-            financial narrative.
-          </p>
-        )}
+        ) : null}
 
-        <div className="mt-6">
-          <Button variant="outline" onClick={() => setTableOpen(true)}>
-            <Table2 className="size-4" /> View financial data table
-          </Button>
-        </div>
+        {hasTable ? (
+          <div className="mt-6">
+            <Button variant="outline" onClick={() => setTableOpen(true)}>
+              <Table2 className="size-4" /> View financial data table
+            </Button>
+          </div>
+        ) : null}
 
         {fin.narrative ? (
-          <div className="mt-8 rounded-xl border-l-4 border-primary bg-muted/50 p-5">
-            <span className="label-caps">Sense-making</span>
-            <p className="mt-1 text-[15px] font-medium leading-relaxed text-foreground">
-              {fin.narrative}
-            </p>
+          <div className="mt-8">
+            <Callout label="Sense-making" text={fin.narrative} />
           </div>
         ) : null}
       </CollapsibleCard>
 
-      {/* Block 2: Challenges */}
+      {/* Block II — Challenges */}
       <CollapsibleCard index="II" title="Overall Business Challenge / Aspiration">
         {profile.challenges.length === 0 ? (
           <Empty text="No challenges captured yet." />
@@ -322,16 +365,16 @@ export function ProfileView({ profile }: { profile: CompanyProfile }) {
                   <p className="text-sm text-muted-foreground">—</p>
                 )}
 
-                {challenge.quote ? (
-                  <blockquote className="mt-4 border-l-2 border-border pl-4 italic text-muted-foreground">
-                    “{challenge.quote}”
-                    {challenge.quoteBy ? (
-                      <cite className="mt-2 block text-xs font-bold uppercase not-italic text-muted-foreground">
-                        — {challenge.quoteBy}
-                      </cite>
-                    ) : null}
-                  </blockquote>
+                {challenge.status ? (
+                  <p className="mt-4 rounded-lg bg-card px-4 py-2 text-sm font-medium text-foreground">
+                    <span className="label-caps mr-2">Status</span>
+                    {challenge.status}
+                  </p>
                 ) : null}
+
+                {challenge.quotes.map((q, qi) => (
+                  <QuoteBlock key={qi} q={q} />
+                ))}
 
                 <Sources sources={challenge.sources} />
               </div>
@@ -340,20 +383,25 @@ export function ProfileView({ profile }: { profile: CompanyProfile }) {
         )}
       </CollapsibleCard>
 
-      {/* Block 3: Verticals */}
+      {/* Block III — Verticals */}
       <CollapsibleCard index="III" title="Business Verticals">
+        {profile.verticalsNote ? (
+          <div className="mb-6">
+            <Callout label="How these verticals are defined" text={profile.verticalsNote} />
+          </div>
+        ) : null}
         {profile.verticals.length === 0 ? (
           <Empty text="No business verticals captured yet." />
         ) : (
-          <div className="flex gap-10 overflow-x-auto pb-6">
+          <div className="space-y-6">
             {profile.verticals.map((v, i) => (
-              <VerticalColumn key={i} v={v} onOpen={(kind) => setPopup({ v, kind })} />
+              <VerticalCard key={i} v={v} onOpen={(kind) => setPopup({ v, kind })} />
             ))}
           </div>
         )}
       </CollapsibleCard>
 
-      {/* Block 4: Company-level research */}
+      {/* Block IV — Initiatives */}
       <CollapsibleCard index="IV" title="Company-level Research">
         {profile.initiatives.length === 0 ? (
           <Empty text="No initiatives captured yet." />
@@ -385,7 +433,7 @@ export function ProfileView({ profile }: { profile: CompanyProfile }) {
         )}
       </CollapsibleCard>
 
-      {/* Block 5: Partner contributions */}
+      {/* Block V — Partner contributions */}
       <CollapsibleCard index="V" title="Partner Contributions">
         {profile.partnerContributions.length === 0 ? (
           <Empty text="No partner engagements recorded yet." />
@@ -472,9 +520,7 @@ export function ProfileView({ profile }: { profile: CompanyProfile }) {
 
           {popup?.kind === "stakeholders" ? <BulletList items={popup.v.stakeholders} /> : null}
 
-          {popup?.kind === "engagementModel" ? (
-            <ChannelEngagement v={popup.v} />
-          ) : null}
+          {popup?.kind === "engagementModel" ? <ChannelEngagement v={popup.v} /> : null}
 
           {popup?.kind === "contributions" ? (
             popup.v.contributions.length === 0 ? (
@@ -503,12 +549,125 @@ export function ProfileView({ profile }: { profile: CompanyProfile }) {
   );
 }
 
+/* ---------- verticals ---------- */
+
+function VerticalCard({
+  v,
+  onOpen,
+}: {
+  v: Vertical;
+  onOpen: (kind: VerticalPopup["kind"]) => void;
+}) {
+  const hasRevenue =
+    !!v.revenueValue || !!v.revenueGrowth || v.revenueContributors.length > 0 || !!v.revenueDetails;
+  const engagementCount =
+    v.engagementModel.length +
+    v.channelStats.length +
+    v.dealerChannelTypes.length +
+    (v.engagementMapUrl ? 1 : 0) +
+    (v.channelMethodology ? 1 : 0);
+
+  return (
+    <div className="rounded-2xl border border-border bg-muted/20 p-6">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h4 className="font-display text-2xl font-bold text-foreground">{v.name}</h4>
+          {v.description ? (
+            <p className="mt-1 text-sm text-muted-foreground">{v.description}</p>
+          ) : null}
+        </div>
+        {v.shareOfRevenue ? (
+          <span className="rounded-full bg-primary px-3 py-1 text-[11px] font-bold uppercase text-primary-foreground">
+            {v.shareOfRevenue}
+          </span>
+        ) : null}
+      </div>
+
+      {v.basicDetails ? (
+        <p className="mt-3 whitespace-pre-line text-sm text-foreground">{v.basicDetails}</p>
+      ) : null}
+
+      <div className="mt-5 grid gap-5 md:grid-cols-2">
+        {hasRevenue ? (
+          <div className="rounded-xl border border-border bg-card p-4">
+            <span className="label-caps">Revenue</span>
+            <div className="mt-1 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+              <span className="font-display text-2xl font-bold text-foreground">
+                {v.revenueValue || "—"}
+              </span>
+              {v.revenueGrowth ? (
+                <span className="rounded-full bg-good-soft px-2 py-0.5 text-xs font-bold text-good-foreground">
+                  {v.revenueGrowth}
+                </span>
+              ) : null}
+            </div>
+            {v.revenueDetails ? (
+              <p className="mt-2 whitespace-pre-line text-sm text-muted-foreground">
+                {v.revenueDetails}
+              </p>
+            ) : null}
+            {v.revenueContributors.length > 0 ? (
+              <div className="mt-3">
+                <span className="label-caps">Major contributors</span>
+                <ul className="mt-1 space-y-1.5">
+                  {v.revenueContributors.map((c, i) => (
+                    <li key={i} className="text-sm text-foreground">
+                      <span className="font-semibold">{c.name}</span>
+                      {c.detail ? <span className="text-muted-foreground"> — {c.detail}</span> : null}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+
+        {v.mixChartUrl ? (
+          <ImageFigure src={v.mixChartUrl} title="Revenue / volume mix" caption={v.mixChartCaption} />
+        ) : null}
+      </div>
+
+      {v.revenueInsight ? (
+        <div className="mt-5">
+          <Callout label="What really drives this vertical" text={v.revenueInsight} />
+        </div>
+      ) : null}
+
+      <div className="mt-5 flex flex-wrap gap-2">
+        {v.stakeholders.length > 0 ? (
+          <ClickIn
+            label="Stakeholders"
+            count={v.stakeholders.length}
+            onClick={() => onOpen("stakeholders")}
+          />
+        ) : null}
+        {engagementCount > 0 ? (
+          <ClickIn
+            label={v.channelModelName || "Channel engagement model"}
+            count={engagementCount}
+            onClick={() => onOpen("engagementModel")}
+          />
+        ) : null}
+        {v.contributions.length > 0 ? (
+          <ClickIn
+            label="Illumine's potential contributions"
+            count={v.contributions.length}
+            highlight
+            onClick={() => onOpen("contributions")}
+          />
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 function ChannelEngagement({ v }: { v: Vertical }) {
   const hasAnything =
     v.engagementModel.length > 0 ||
     !!v.engagementMapUrl ||
     v.channelStats.length > 0 ||
-    v.dealerChannelTypes.length > 0;
+    v.dealerChannelTypes.length > 0 ||
+    !!v.channelMethodology;
 
   if (!hasAnything) {
     return (
@@ -520,6 +679,10 @@ function ChannelEngagement({ v }: { v: Vertical }) {
 
   return (
     <div className="space-y-4">
+      {v.channelModelName ? (
+        <p className="text-sm font-semibold text-foreground">{v.channelModelName}</p>
+      ) : null}
+
       {v.engagementModel.length > 0 ? (
         <SubCard title="How the engagement works">
           <BulletList items={v.engagementModel} />
@@ -537,7 +700,7 @@ function ChannelEngagement({ v }: { v: Vertical }) {
       ) : null}
 
       {v.channelStats.length > 0 ? (
-        <SubCard title="Retail network — by the numbers">
+        <SubCard title="Dealers, executives & salesforce">
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
             {v.channelStats.map((s, i) => (
               <div key={i} className="rounded-lg border border-border bg-card p-3">
@@ -565,99 +728,13 @@ function ChannelEngagement({ v }: { v: Vertical }) {
           </div>
         </SubCard>
       ) : null}
-    </div>
-  );
-}
 
-function VerticalColumn({
-  v,
-  onOpen,
-}: {
-  v: Vertical;
-  onOpen: (kind: VerticalPopup["kind"]) => void;
-}) {
-  const hasRevenue =
-    !!v.revenueValue ||
-    !!v.revenueGrowth ||
-    v.revenueContributors.length > 0 ||
-    !!v.revenueDetails;
-
-  return (
-    <div className="relative w-[400px] shrink-0 border-l-2 border-primary pl-8">
-      <span className="absolute -left-[11px] top-0 size-5 rounded-full border-4 border-primary bg-card" />
-      <div className="mb-5">
-        <h4 className="font-display text-2xl font-bold text-foreground">{v.name}</h4>
-        {v.description ? (
-          <p className="mt-2 text-sm text-muted-foreground">{v.description}</p>
-        ) : null}
-      </div>
-
-      {v.basicDetails ? (
-        <div className="mb-4">
-          <span className="label-caps">Basic details</span>
-          <p className="mt-1 whitespace-pre-line text-sm text-foreground">{v.basicDetails}</p>
-        </div>
+      {v.channelMethodology ? (
+        <p className="whitespace-pre-line rounded-lg bg-muted/40 p-3 text-xs leading-relaxed text-muted-foreground">
+          <span className="font-bold">Methodology: </span>
+          {v.channelMethodology}
+        </p>
       ) : null}
-
-      {hasRevenue ? (
-        <div className="mb-5 rounded-xl border border-border bg-muted/40 p-4">
-          <span className="label-caps">Revenue</span>
-          <div className="mt-1 flex flex-wrap items-baseline gap-x-3 gap-y-1">
-            <span className="font-display text-xl font-bold text-foreground">
-              {v.revenueValue || "—"}
-            </span>
-            {v.revenueGrowth ? (
-              <span className="rounded-full bg-good-soft px-2 py-0.5 text-xs font-bold text-good-foreground">
-                {v.revenueGrowth}
-              </span>
-            ) : null}
-          </div>
-          {v.revenueDetails ? (
-            <p className="mt-2 whitespace-pre-line text-sm text-muted-foreground">
-              {v.revenueDetails}
-            </p>
-          ) : null}
-          {v.revenueContributors.length > 0 ? (
-            <div className="mt-3">
-              <span className="label-caps">Major contributors</span>
-              <ul className="mt-1 space-y-1.5">
-                {v.revenueContributors.map((c, i) => (
-                  <li key={i} className="text-sm text-foreground">
-                    <span className="font-semibold">{c.name}</span>
-                    {c.detail ? (
-                      <span className="text-muted-foreground"> — {c.detail}</span>
-                    ) : null}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
-        </div>
-      ) : null}
-
-      <div className="space-y-2">
-        <ClickIn
-          label="Stakeholders"
-          count={v.stakeholders.length}
-          onClick={() => onOpen("stakeholders")}
-        />
-        <ClickIn
-          label="Channel engagement model"
-          count={
-            v.engagementModel.length +
-            v.channelStats.length +
-            v.dealerChannelTypes.length +
-            (v.engagementMapUrl ? 1 : 0)
-          }
-          onClick={() => onOpen("engagementModel")}
-        />
-        <ClickIn
-          label="Illumine's potential contributions"
-          count={v.contributions.length}
-          highlight
-          onClick={() => onOpen("contributions")}
-        />
-      </div>
     </div>
   );
 }
@@ -678,7 +755,7 @@ function ClickIn({
       variant={highlight ? "secondary" : "ghost"}
       onClick={onClick}
       className={cn(
-        "w-full justify-between rounded-lg bg-muted px-4 py-3 text-sm font-medium hover:bg-accent",
+        "justify-between gap-2 rounded-lg bg-muted px-4 py-3 text-sm font-medium hover:bg-accent",
         highlight && "bg-good-soft text-good-foreground hover:bg-good-soft/80 font-bold",
       )}
     >

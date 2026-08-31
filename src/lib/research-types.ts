@@ -36,14 +36,24 @@ export type Financials = {
   narrative: string;
 };
 
+/** A stakeholder quote tied to a challenge, with its own source. */
+export type Quote = {
+  text: string;
+  by: string;
+  sourceLabel: string;
+  sourceUrl: string;
+};
+
 export type Challenge = {
   theme: string;
   /** A thorough, plain-language explanation of the problem. */
   problem: string;
-  quote: string;
-  quoteBy: string;
+  /** Short "where this stands right now" line. */
+  status: string;
+  /** Verbatim stakeholder quotes, each genuinely about this problem. */
+  quotes: Quote[];
   tag: string;
-  /** Where the problem / quote was pulled from. */
+  /** Where the problem / claims were pulled from. */
   sources: SourceLink[];
 };
 
@@ -72,22 +82,33 @@ export type Vertical = {
   name: string;
   description: string;
   basicDetails: string;
+  /** e.g. "~20% of group revenue". */
+  shareOfRevenue: string;
   /** Optional free-text revenue narrative (kept for depth / legacy dumps). */
   revenueDetails: string;
   /** Headline revenue figure for the vertical, e.g. "₹4,200 Cr (FY24)". */
   revenueValue: string;
   /** Growth, e.g. "+12% YoY" or "3-yr CAGR 9%". */
   revenueGrowth: string;
+  /** The non-obvious insight about what really drives this vertical's revenue. */
+  revenueInsight: string;
   /** Major revenue contributors — products / services / elements of this vertical. */
   revenueContributors: RevenueContributor[];
-  /** Readable bullet points — one stakeholder / group per line. */
+  /** Image URL of a product / volume / revenue mix chart for this vertical. */
+  mixChartUrl: string;
+  mixChartCaption: string;
+  /** e.g. "Dealer Franchise Model (dominant channel)". */
+  channelModelName: string;
+  /** Decision-making stakeholders — one per line. */
   stakeholders: string[];
-  /** Readable bullet points — channel engagement model, keep numbers legible. */
+  /** Readable bullet points — how the channel engagement works. */
   engagementModel: string[];
   /** Image URL of a small stakeholder engagement map. */
   engagementMapUrl: string;
   /** Numbers card — dealers, dealer executives, salesforce, distributors… */
   channelStats: ChannelStat[];
+  /** How the estimated numbers were derived. */
+  channelMethodology: string;
   /** Types of dealers & channels active in this vertical. */
   dealerChannelTypes: string[];
   contributions: IllumineContribution[];
@@ -97,14 +118,20 @@ export const emptyVertical = (): Vertical => ({
   name: "",
   description: "",
   basicDetails: "",
+  shareOfRevenue: "",
   revenueDetails: "",
   revenueValue: "",
   revenueGrowth: "",
+  revenueInsight: "",
   revenueContributors: [],
+  mixChartUrl: "",
+  mixChartCaption: "",
+  channelModelName: "",
   stakeholders: [],
   engagementModel: [],
   engagementMapUrl: "",
   channelStats: [],
+  channelMethodology: "",
   dealerChannelTypes: [],
   contributions: [],
 });
@@ -158,6 +185,24 @@ export function toContributors(value: unknown): RevenueContributor[] {
     .filter((c) => c.name || c.detail);
 }
 
+export function toQuotes(value: unknown): Quote[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((x) => {
+      if (x && typeof x === "object") {
+        const o = x as Record<string, unknown>;
+        return {
+          text: str(o, "text", "quote"),
+          by: str(o, "by", "quoteBy", "author", "role"),
+          sourceLabel: str(o, "sourceLabel", "source", "publication"),
+          sourceUrl: str(o, "sourceUrl", "url", "link", "href"),
+        };
+      }
+      return { text: String(x).trim(), by: "", sourceLabel: "", sourceUrl: "" };
+    })
+    .filter((q) => q.text);
+}
+
 export function toStats(value: unknown): ChannelStat[] {
   if (!Array.isArray(value)) return [];
   return value
@@ -199,14 +244,20 @@ function normalizeVertical(raw: unknown): Vertical {
     name: str(v, "name"),
     description: str(v, "description"),
     basicDetails: str(v, "basicDetails"),
+    shareOfRevenue: str(v, "shareOfRevenue", "revenueShare", "share"),
     revenueDetails: str(v, "revenueDetails"),
     revenueValue: str(v, "revenueValue", "revenue"),
     revenueGrowth: str(v, "revenueGrowth", "growth"),
+    revenueInsight: str(v, "revenueInsight", "revenueContributorInsight", "insight"),
     revenueContributors: toContributors(v["revenueContributors"] ?? v["contributors"]),
-    stakeholders: toBullets(v["stakeholders"]),
-    engagementModel: toBullets(v["engagementModel"]),
+    mixChartUrl: str(v, "mixChartUrl", "mixChart", "chartUrl"),
+    mixChartCaption: str(v, "mixChartCaption", "chartCaption"),
+    channelModelName: str(v, "channelModelName", "channelModel", "engagementModelName"),
+    stakeholders: toBullets(v["stakeholders"] ?? v["decisionMakers"]),
+    engagementModel: toBullets(v["engagementModel"] ?? v["engagementSteps"]),
     engagementMapUrl: str(v, "engagementMapUrl", "engagementMap", "mapUrl"),
     channelStats: toStats(v["channelStats"] ?? v["channelNumbers"] ?? v["numbers"]),
+    channelMethodology: str(v, "channelMethodology", "methodology"),
     dealerChannelTypes: toBullets(v["dealerChannelTypes"] ?? v["dealerTypes"] ?? v["channelTypes"]),
     contributions: toContributions(v["contributions"]),
   };
@@ -214,11 +265,21 @@ function normalizeVertical(raw: unknown): Vertical {
 
 function normalizeChallenge(raw: unknown): Challenge {
   const c = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
+  const quotes = toQuotes(c["quotes"]);
+  const legacyQuote = str(c, "quote");
+  if (!quotes.length && legacyQuote) {
+    quotes.push({
+      text: legacyQuote,
+      by: str(c, "quoteBy", "quoteby", "by"),
+      sourceLabel: "",
+      sourceUrl: "",
+    });
+  }
   return {
     theme: str(c, "theme", "category"),
     problem: str(c, "problem", "explanation", "description"),
-    quote: str(c, "quote"),
-    quoteBy: str(c, "quoteBy", "quoteby", "by"),
+    status: str(c, "status", "currentStatus"),
+    quotes,
     tag: str(c, "tag", "scope"),
     sources: toSources(c["sources"] ?? c["references"] ?? c["links"]),
   };
@@ -256,6 +317,8 @@ export type PartnerContribution = {
 export type CompanyProfile = {
   financials: Financials;
   challenges: Challenge[];
+  /** Optional framing note shown above the business verticals. */
+  verticalsNote: string;
   verticals: Vertical[];
   initiatives: Initiative[];
   partnerContributions: PartnerContribution[];
@@ -299,6 +362,7 @@ export const emptyFinancials = (): Financials => ({
 export const emptyProfile = (): CompanyProfile => ({
   financials: emptyFinancials(),
   challenges: [],
+  verticalsNote: "",
   verticals: [],
   initiatives: [],
   partnerContributions: [],
@@ -325,6 +389,7 @@ export function normalizeProfile(raw: unknown): CompanyProfile {
       narrative: typeof fin.narrative === "string" ? fin.narrative : "",
     },
     challenges: Array.isArray(p.challenges) ? p.challenges.map(normalizeChallenge) : [],
+    verticalsNote: typeof p.verticalsNote === "string" ? p.verticalsNote : "",
     verticals: Array.isArray(p.verticals) ? p.verticals.map(normalizeVertical) : [],
     initiatives: Array.isArray(p.initiatives) ? p.initiatives : [],
     partnerContributions: Array.isArray(p.partnerContributions) ? p.partnerContributions : [],

@@ -1,4 +1,9 @@
-export type ExtractedImage = { src: string; alt: string };
+export type ExtractedImage = {
+  src: string;
+  alt: string;
+  /** Nearby headings / text, used to guess which profile slot the image belongs to. */
+  context: string;
+};
 
 export type ParsedHtml = { text: string; images: ExtractedImage[] };
 
@@ -12,6 +17,29 @@ export function isHtmlFile(file: { name: string; type?: string }): boolean {
 
 function firstToken(value: string): string {
   return value.trim().split(/\s+/)[0] ?? "";
+}
+
+/** Collects nearby headings + local text around an element, for slot matching. */
+function contextFor(el: Element): string {
+  const parts: string[] = [];
+  let node: Element | null = el;
+  let hops = 0;
+  while (node && hops < 4) {
+    let sib: Element | null = node.previousElementSibling;
+    let scanned = 0;
+    while (sib && scanned < 12) {
+      if (/^H[1-6]$/.test(sib.tagName)) {
+        parts.push(sib.textContent || "");
+        break;
+      }
+      sib = sib.previousElementSibling;
+      scanned++;
+    }
+    node = node.parentElement;
+    hops++;
+  }
+  parts.push(el.parentElement?.textContent?.slice(0, 240) || "");
+  return parts.join(" ").replace(/\s+/g, " ").trim().slice(0, 320);
 }
 
 /** Extracts readable text and any usable image references from an HTML dump. */
@@ -31,7 +59,7 @@ export function parseHtmlDump(html: string): ParsedHtml {
       const u = (m[1] ?? "").trim();
       if ((/^data:image\//i.test(u) || IMG_HREF_RE.test(u)) && !seen.has(u)) {
         seen.add(u);
-        images.push({ src: u, alt: "" });
+        images.push({ src: u, alt: "", context: "" });
       }
     }
     return { text, images };
@@ -42,18 +70,23 @@ export function parseHtmlDump(html: string): ParsedHtml {
 
   const images: ExtractedImage[] = [];
   const seen = new Set<string>();
-  const add = (src: string, alt: string) => {
+  const add = (src: string, alt: string, context: string) => {
     const clean = src.trim();
     if (!clean || seen.has(clean)) return;
     // accept absolute http(s), protocol-relative, and inline data images
     if (!/^(https?:|\/\/|data:image\/)/i.test(clean)) return;
     seen.add(clean);
-    images.push({ src: clean.startsWith("//") ? `https:${clean}` : clean, alt: alt.trim() });
+    images.push({
+      src: clean.startsWith("//") ? `https:${clean}` : clean,
+      alt: alt.trim(),
+      context: context.trim(),
+    });
   };
 
   // <img>, including lazy-load attributes and srcset
   doc.querySelectorAll("img").forEach((img) => {
     const alt = img.getAttribute("alt") || "";
+    const ctx = contextFor(img);
     add(
       img.getAttribute("src") ||
         img.getAttribute("data-src") ||
@@ -61,27 +94,31 @@ export function parseHtmlDump(html: string): ParsedHtml {
         img.getAttribute("data-lazy-src") ||
         "",
       alt,
+      ctx,
     );
     const srcset = img.getAttribute("srcset") || img.getAttribute("data-srcset") || "";
-    srcset.split(",").forEach((part) => part.trim() && add(firstToken(part), alt));
+    srcset.split(",").forEach((part) => part.trim() && add(firstToken(part), alt, ctx));
   });
 
   // <picture><source srcset>
   doc.querySelectorAll("source[srcset]").forEach((s) => {
-    (s.getAttribute("srcset") || "").split(",").forEach((part) => part.trim() && add(firstToken(part), ""));
+    const ctx = contextFor(s);
+    (s.getAttribute("srcset") || "")
+      .split(",")
+      .forEach((part) => part.trim() && add(firstToken(part), "", ctx));
   });
 
   // links straight to an image file
   doc.querySelectorAll("a[href]").forEach((a) => {
     const href = (a.getAttribute("href") || "").trim();
-    if (IMG_HREF_RE.test(href)) add(href, a.textContent || "");
+    if (IMG_HREF_RE.test(href)) add(href, a.textContent || "", contextFor(a));
   });
 
   // CSS background images on inline styles
   doc.querySelectorAll("[style]").forEach((el) => {
     const style = el.getAttribute("style") || "";
     const m = /background(?:-image)?\s*:[^;]*url\(\s*(['"]?)([^'")]+)\1\s*\)/i.exec(style);
-    if (m && m[2]) add(m[2], "");
+    if (m && m[2]) add(m[2], "", contextFor(el));
   });
 
   // inline <svg> charts — serialize to a data URL, skipping small icons
@@ -103,7 +140,7 @@ export function parseHtmlDump(html: string): ParsedHtml {
     }
     if (markup.length > 400) {
       const title = svg.querySelector("title")?.textContent || "";
-      add(`data:image/svg+xml;charset=utf-8,${encodeURIComponent(markup)}`, title);
+      add(`data:image/svg+xml;charset=utf-8,${encodeURIComponent(markup)}`, title, contextFor(svg));
     }
   });
 

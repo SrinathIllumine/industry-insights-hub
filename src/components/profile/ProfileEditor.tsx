@@ -4,7 +4,8 @@ import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
 
 import { cn } from "@/lib/utils";
-import { dataUrlToFile, isHtmlFile, parseHtmlDump } from "@/lib/html-import";
+import { dataUrlToFile, isHtmlFile, parseHtmlDump, type ExtractedImage } from "@/lib/html-import";
+import { matchHtmlImages, materializeProfileImages } from "@/lib/html-image-map";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -437,28 +438,23 @@ export function ProfileEditor({
                   }}
                 />
               </div>
-              <div className="grid gap-4 md:grid-cols-3">
-                <div className="md:col-span-2">
-                  <TextField
-                    label="Quote from stakeholders (verbatim, must be relevant to this problem)"
-                    value={challenge.quote}
-                    onChange={(v) => {
-                      const challenges = [...profile.challenges];
-                      challenges[i] = { ...challenge, quote: v };
-                      setProfile({ ...profile, challenges });
-                    }}
-                  />
-                </div>
-                <Field
-                  label="Said by"
-                  value={challenge.quoteBy}
-                  onChange={(v) => {
-                    const challenges = [...profile.challenges];
-                    challenges[i] = { ...challenge, quoteBy: v };
-                    setProfile({ ...profile, challenges });
-                  }}
-                />
-              </div>
+              <Field
+                label="Status right now (one line)"
+                value={challenge.status}
+                onChange={(v) => {
+                  const challenges = [...profile.challenges];
+                  challenges[i] = { ...challenge, status: v };
+                  setProfile({ ...profile, challenges });
+                }}
+              />
+              <QuotesField
+                items={challenge.quotes}
+                onChange={(quotes) => {
+                  const challenges = [...profile.challenges];
+                  challenges[i] = { ...challenge, quotes };
+                  setProfile({ ...profile, challenges });
+                }}
+              />
               <SourcesField
                 items={challenge.sources}
                 onChange={(sources) => {
@@ -476,7 +472,7 @@ export function ProfileEditor({
                 ...profile,
                 challenges: [
                   ...profile.challenges,
-                  { theme: "", problem: "", quote: "", quoteBy: "", tag: "", sources: [] },
+                  { theme: "", problem: "", status: "", quotes: [], tag: "", sources: [] },
                 ],
               })
             }
@@ -486,6 +482,11 @@ export function ProfileEditor({
         </TabsContent>
 
         <TabsContent value="verticals" className="space-y-4 pt-6">
+          <TextField
+            label="Framing note (shown above the verticals — how they are defined, what is / isn't a standard BU)"
+            value={profile.verticalsNote}
+            onChange={(v) => setProfile({ ...profile, verticalsNote: v })}
+          />
           {profile.verticals.map((v, i) => {
             const update = (patch: Partial<Vertical>) => {
               const verticals = [...profile.verticals];
@@ -515,22 +516,32 @@ export function ProfileEditor({
 
                 <div className="space-y-4 rounded-xl border border-border bg-muted/30 p-4">
                   <Label>Revenue</Label>
-                  <div className="grid gap-4 md:grid-cols-2">
+                  <div className="grid gap-4 md:grid-cols-3">
                     <Field
                       label="Headline revenue value"
                       value={v.revenueValue}
                       onChange={(x) => update({ revenueValue: x })}
                     />
                     <Field
-                      label="Growth (e.g. +12% YoY / 3-yr CAGR 9%)"
+                      label="Growth (e.g. +12% YoY)"
                       value={v.revenueGrowth}
                       onChange={(x) => update({ revenueGrowth: x })}
                     />
+                    <Field
+                      label="Share of group revenue"
+                      value={v.shareOfRevenue}
+                      onChange={(x) => update({ shareOfRevenue: x })}
+                    />
                   </div>
                   <TextField
-                    label="Revenue narrative (optional, for depth)"
+                    label="Revenue sub-line detail (PAT, units sold, net cash…)"
                     value={v.revenueDetails}
                     onChange={(x) => update({ revenueDetails: x })}
+                  />
+                  <TextField
+                    label="Revenue insight — what really drives this vertical's revenue"
+                    value={v.revenueInsight}
+                    onChange={(x) => update({ revenueInsight: x })}
                   />
                   <PairListField
                     label="Major revenue contributors"
@@ -544,29 +555,43 @@ export function ProfileEditor({
                       })
                     }
                   />
-                </div>
-
-                <div className="grid gap-6 md:grid-cols-2">
-                  <BulletsField
-                    label="Stakeholders involved in the retail engagement"
-                    help="One stakeholder or group per bullet — include role, context and any numbers."
-                    items={v.stakeholders}
-                    onChange={(x) => update({ stakeholders: x })}
+                  <ImageField
+                    label="Product / volume / revenue mix chart (image)"
+                    value={v.mixChartUrl}
+                    onChange={(x) => update({ mixChartUrl: x })}
                   />
-                  <BulletsField
-                    label="How the channel engagement works (steps)"
-                    help="One step / mechanism per bullet. Keep figures readable, e.g. “~12,000 retailers across 4 zones”."
-                    items={v.engagementModel}
-                    onChange={(x) => update({ engagementModel: x })}
+                  <Field
+                    label="Mix chart caption"
+                    value={v.mixChartCaption}
+                    onChange={(x) => update({ mixChartCaption: x })}
                   />
                 </div>
 
                 <div className="space-y-4 rounded-xl border border-border bg-muted/30 p-4">
                   <div>
-                    <Label>Retail network detail</Label>
+                    <Label>Channel engagement</Label>
                     <p className="text-xs text-muted-foreground">
-                      Leave anything blank and it is simply hidden in the report.
+                      Shown in a popup. Leave anything blank and its card is hidden in the report.
                     </p>
+                  </div>
+                  <Field
+                    label="Channel model name (e.g. Dealer Franchise Model — dominant channel)"
+                    value={v.channelModelName}
+                    onChange={(x) => update({ channelModelName: x })}
+                  />
+                  <div className="grid gap-6 md:grid-cols-2">
+                    <BulletsField
+                      label="Main decision-making stakeholders"
+                      help="One per bullet — name — role — what they decide."
+                      items={v.stakeholders}
+                      onChange={(x) => update({ stakeholders: x })}
+                    />
+                    <BulletsField
+                      label="How the channel engagement works (steps)"
+                      help="One step / mechanism per bullet."
+                      items={v.engagementModel}
+                      onChange={(x) => update({ engagementModel: x })}
+                    />
                   </div>
                   <ImageField
                     label="Stakeholder engagement map (image)"
@@ -574,14 +599,19 @@ export function ProfileEditor({
                     onChange={(x) => update({ engagementMapUrl: x })}
                   />
                   <PairListField
-                    label="Network numbers (shown as a numbers card)"
-                    help="Dealers, dealer executives, salesforce, distributors, retail touchpoints…"
+                    label="Dealers, executives & salesforce (numbers card)"
+                    help="Dealers, dealer sales executives per dealership, company sales workforce, retail outlets…"
                     aLabel="Label"
-                    bLabel="Number"
+                    bLabel="Number (incl. est./confirmed)"
                     items={v.channelStats.map((s) => ({ a: s.label, b: s.value }))}
                     onChange={(rows) =>
                       update({ channelStats: rows.map((r) => ({ label: r.a, value: r.b })) })
                     }
+                  />
+                  <TextField
+                    label="Methodology note (how estimated numbers were derived)"
+                    value={v.channelMethodology}
+                    onChange={(x) => update({ channelMethodology: x })}
                   />
                   <BulletsField
                     label="Types of dealers & channels"
@@ -771,14 +801,23 @@ function ImportPanel({
   const [raw, setRaw] = useState("");
   const [busy, setBusy] = useState(false);
   const [dragging, setDragging] = useState(false);
-  const [imgCount, setImgCount] = useState(0);
+  const [parsedImages, setParsedImages] = useState<ExtractedImage[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
   const structure = useServerFn(structureResearchDump);
+
+  const registerImages = (images: ExtractedImage[]) => {
+    if (!images.length) return;
+    setParsedImages((prev) => {
+      const seen = new Set(prev.map((im) => im.src));
+      return [...prev, ...images.filter((im) => !seen.has(im.src))];
+    });
+    onImagesFound?.(images.map((im) => im.src));
+  };
 
   const readFiles = async (files: FileList | null) => {
     if (!files?.length) return;
     const texts: string[] = [];
-    const foundImages: string[] = [];
+    const collected: ExtractedImage[] = [];
     let sawHtml = false;
 
     for (const file of Array.from(files)) {
@@ -786,29 +825,18 @@ function ImportPanel({
       if (isHtmlFile(file)) {
         sawHtml = true;
         const { text, images } = parseHtmlDump(content);
-        let block = `--- ${file.name} (HTML → text) ---\n${text}`;
-        const linkable = images.filter((im) => im.src.startsWith("http"));
-        if (linkable.length) {
-          block +=
-            `\n\n[Image URLs referenced in this document — use where relevant, e.g. benchmarkImageUrl / charts / engagementMapUrl]\n` +
-            linkable.map((im) => `- ${im.src}${im.alt ? ` (${im.alt})` : ""}`).join("\n");
-        }
-        if (images.length > linkable.length) {
-          block += `\n\n[${images.length - linkable.length} embedded image(s) also available to attach manually in the editor]`;
-        }
-        texts.push(block);
-        for (const im of images) foundImages.push(im.src);
+        texts.push(`--- ${file.name} (HTML → text) ---\n${text}`);
+        collected.push(...images);
       } else {
         texts.push(`--- ${file.name} ---\n${content}`);
       }
     }
 
     setRaw((prev) => [prev, ...texts].filter(Boolean).join("\n\n"));
-    if (foundImages.length) {
-      setImgCount((n) => n + foundImages.length);
-      onImagesFound?.(foundImages);
+    registerImages(collected);
+    if (collected.length) {
       toast.success(
-        `${foundImages.length} image${foundImages.length > 1 ? "s" : ""} found — pick them from any image field`,
+        `${collected.length} image${collected.length > 1 ? "s" : ""} found — they will be placed automatically when you structure the data`,
       );
     } else if (sawHtml) {
       toast.info(
@@ -822,21 +850,16 @@ function ImportPanel({
       toast.error("Paste or drop some research data first");
       return;
     }
-    // If the pasted text is itself a full HTML document, reduce it to text +
-    // image URLs first (same treatment as an uploaded .html file).
     let payload = raw;
+    let images = parsedImages;
+    // If the pasted text is itself an HTML document, reduce it to text first.
     if (/^\s*(<!doctype html|<html[\s>]|<body[\s>])/i.test(raw)) {
-      const { text, images } = parseHtmlDump(raw);
-      const linkable = images.filter((im) => im.src.startsWith("http"));
-      payload =
-        text +
-        (linkable.length
-          ? `\n\n[Image URLs referenced in this document]\n` +
-            linkable.map((im) => `- ${im.src}`).join("\n")
-          : "");
-      if (images.length) {
-        setImgCount((n) => n + images.length);
-        onImagesFound?.(images.map((im) => im.src));
+      const parsed = parseHtmlDump(raw);
+      payload = parsed.text;
+      if (parsed.images.length) {
+        registerImages(parsed.images);
+        const seen = new Set(images.map((im) => im.src));
+        images = [...images, ...parsed.images.filter((im) => !seen.has(im.src))];
       }
     }
 
@@ -856,7 +879,16 @@ function ImportPanel({
         toast.error(result.error);
         return;
       }
-      onParsed(normalizeProfile(result.profile));
+      let profile = normalizeProfile(result.profile);
+      if (images.length) {
+        profile = matchHtmlImages(profile, images);
+        profile = normalizeProfile(profile);
+        profile = await materializeProfileImages(profile, (dataUrl) =>
+          uploadCompanyImage(dataUrlToFile(dataUrl, "from-html")),
+        );
+        profile = normalizeProfile(profile);
+      }
+      onParsed(profile);
       toast.success("Data structured — review the blocks and save");
     } catch (error) {
       toast.error((error as Error).message);
@@ -886,8 +918,8 @@ function ImportPanel({
         <Upload className="mb-3 size-6 text-muted-foreground" />
         <p className="text-sm font-medium">Drop markdown, HTML, text or CSV dumps here</p>
         <p className="text-xs text-muted-foreground">
-          Anything works — Claude MD or HTML exports, meeting notes, pasted tables. Images inside
-          an HTML file are extracted for you to attach.
+          Anything works — Claude MD or HTML exports, meeting notes, pasted tables. Charts, mix
+          graphs and engagement maps inside an HTML file are extracted and placed automatically.
         </p>
         <input
           ref={inputRef}
@@ -898,11 +930,11 @@ function ImportPanel({
           onChange={(e) => void readFiles(e.target.files)}
         />
       </div>
-      {imgCount > 0 ? (
+      {parsedImages.length > 0 ? (
         <p className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
           <FileCode className="size-4" />
-          {imgCount} image{imgCount > 1 ? "s" : ""} extracted from HTML — open any image field and
-          choose “From imported HTML”.
+          {parsedImages.length} image{parsedImages.length > 1 ? "s" : ""} ready — “Structure into
+          blocks” places them; you can also pick them in any image field.
         </p>
       ) : null}
 
@@ -1103,6 +1135,76 @@ function ImageField({
           </div>
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+type QuoteRow = { text: string; by: string; sourceLabel: string; sourceUrl: string };
+
+function QuotesField({
+  items,
+  onChange,
+}: {
+  items: QuoteRow[];
+  onChange: (next: QuoteRow[]) => void;
+}) {
+  const patch = (i: number, p: Partial<QuoteRow>) => {
+    const next = [...items];
+    const current = next[i];
+    if (!current) return;
+    next[i] = { ...current, ...p };
+    onChange(next);
+  };
+  return (
+    <div className="space-y-2">
+      <Label>Stakeholder quotes</Label>
+      <p className="text-xs text-muted-foreground">
+        Verbatim, each genuinely about this problem. Add its own source link where known — never
+        force-fit a quote.
+      </p>
+      {items.map((q, i) => (
+        <div key={i} className="space-y-2 rounded-lg border border-border bg-card p-3">
+          <div className="flex justify-end">
+            <Button
+              size="icon"
+              variant="ghost"
+              onClick={() => onChange(items.filter((_, x) => x !== i))}
+            >
+              <Trash2 className="size-4 text-destructive" />
+            </Button>
+          </div>
+          <Textarea
+            rows={3}
+            placeholder="“…verbatim quote…”"
+            value={q.text}
+            onChange={(e) => patch(i, { text: e.target.value })}
+          />
+          <div className="grid gap-2 md:grid-cols-3">
+            <Input
+              placeholder="Said by (name, role)"
+              value={q.by}
+              onChange={(e) => patch(i, { by: e.target.value })}
+            />
+            <Input
+              placeholder="Source name"
+              value={q.sourceLabel}
+              onChange={(e) => patch(i, { sourceLabel: e.target.value })}
+            />
+            <Input
+              placeholder="https://… source"
+              value={q.sourceUrl}
+              onChange={(e) => patch(i, { sourceUrl: e.target.value })}
+            />
+          </div>
+        </div>
+      ))}
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={() => onChange([...items, { text: "", by: "", sourceLabel: "", sourceUrl: "" }])}
+      >
+        <Plus className="size-4" /> Add quote
+      </Button>
     </div>
   );
 }
