@@ -14,6 +14,17 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -123,7 +134,11 @@ function IndustryPage() {
               className="flex items-center justify-between rounded-lg border border-border bg-muted/40 px-4 py-2.5"
             >
               <span className="text-sm font-medium">{company.name}</span>
-              <RemoveCompanyButton id={company.id} industryId={industryId} />
+              <RemoveCompanyButton
+                id={company.id}
+                name={company.name}
+                industryId={industryId}
+              />
             </div>
           ))}
         </div>
@@ -134,27 +149,61 @@ function IndustryPage() {
   );
 }
 
-function RemoveCompanyButton({ id, industryId }: { id: string; industryId: string }) {
+function RemoveCompanyButton({
+  id,
+  name,
+  industryId,
+}: {
+  id: string;
+  name: string;
+  industryId: string;
+}) {
   const queryClient = useQueryClient();
   const router = useRouter();
+  const [deleting, setDeleting] = useState(false);
+
+  const remove = async () => {
+    setDeleting(true);
+    try {
+      await deleteCompany(id);
+      await queryClient.invalidateQueries({ queryKey: ["companies", industryId] });
+      await queryClient.invalidateQueries({ queryKey: ["company-counts"] });
+      void router.invalidate();
+      toast.success("Company removed");
+    } catch (error) {
+      toast.error((error as Error).message);
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   return (
-    <Button
-      size="icon"
-      variant="ghost"
-      onClick={async () => {
-        try {
-          await deleteCompany(id);
-          await queryClient.invalidateQueries({ queryKey: ["companies", industryId] });
-          await queryClient.invalidateQueries({ queryKey: ["company-counts"] });
-          void router.invalidate();
-          toast.success("Company removed");
-        } catch (error) {
-          toast.error((error as Error).message);
-        }
-      }}
-    >
-      <Trash2 className="size-4 text-destructive" />
-    </Button>
+    <AlertDialog>
+      <AlertDialogTrigger asChild>
+        <Button size="icon" variant="ghost" aria-label={`Delete ${name}`}>
+          <Trash2 className="size-4 text-destructive" />
+        </Button>
+      </AlertDialogTrigger>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Delete “{name}”?</AlertDialogTitle>
+          <AlertDialogDescription>
+            This permanently removes the company and its entire research profile. This can't be
+            undone.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            disabled={deleting}
+            onClick={remove}
+            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+          >
+            Delete company
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }
 
