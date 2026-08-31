@@ -27,13 +27,13 @@ import type { Industry } from "@/lib/research-types";
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "Industry Research — Industry Research Engine for Retailer Enablement System" },
+      { title: "Industry Research — Industry Research Engine for Retail Enablement System" },
       {
         name: "description",
         content:
           "Browse industry verticals and open decision-grade company research profiles for leadership review.",
       },
-      { property: "og:title", content: "Industry Research — Industry Research Engine for Retailer Enablement System" },
+      { property: "og:title", content: "Industry Research — Industry Research Engine for Retail Enablement System" },
       {
         property: "og:description",
         content: "Browse industry verticals and open company research profiles.",
