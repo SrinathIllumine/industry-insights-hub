@@ -12,7 +12,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             className="h-11 w-auto shrink-0 rounded dark:bg-white dark:p-1"
           />
           <span className="hidden max-w-[15rem] border-l border-border pl-3 text-xs font-semibold uppercase leading-tight tracking-[0.16em] text-muted-foreground md:block">
-            Industry Research Engine for Retailer Enablement System
+            Industry Research Engine for Retail Enablement System
           </span>
         </Link>
         <div className="flex items-center gap-6 text-sm font-medium text-muted-foreground">
