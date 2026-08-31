@@ -67,7 +67,7 @@ function IndustriesPage() {
   return (
     <AppShell>
       <PageHeading
-        title="Industry Research Engine for Retail Enablement System"
+        title="Industry Research"
         subtitle="Select an industry to explore its company research profiles."
         action={
           <Button variant="outline" className="rounded-full" onClick={() => setManageOpen(true)}>
