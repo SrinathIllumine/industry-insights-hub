@@ -13,6 +13,7 @@ import {
   type ExtractedImage,
 } from "@/lib/html-import";
 import { matchHtmlImages, materializeProfileImages } from "@/lib/html-image-map";
+import { looksLikeResearchReport, parseResearchReport } from "@/lib/research-report-import";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -115,7 +116,13 @@ export function ProfileEditor({
           <ImportPanel
             companyName={name}
             settings={settings}
-            onParsed={(parsed) => setProfile(parsed)}
+            onParsed={(parsed, meta) =>
+              onChange({
+                name: meta?.name?.trim() || name,
+                tagline: meta?.tagline?.trim() || tagline,
+                profile: parsed,
+              })
+            }
             onImagesFound={(srcs) =>
               setImportedImages((prev) => [...prev, ...srcs.filter((s) => !prev.includes(s))])
             }
@@ -815,17 +822,21 @@ function ImportPanel({
 }: {
   companyName: string;
   settings: SettingsMap;
-  onParsed: (profile: CompanyProfile) => void;
+  onParsed: (profile: CompanyProfile, meta?: { name?: string; tagline?: string }) => void;
   onImagesFound?: (srcs: string[]) => void;
 }) {
   const [raw, setRaw] = useState("");
   const [busy, setBusy] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [parsedImages, setParsedImages] = useState<ExtractedImage[]>([]);
+  const [htmlSource, setHtmlSource] = useState("");
   const [progress, setProgress] = useState(0);
   const [phase, setPhase] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
   const structure = useServerFn(structureResearchDump);
+
+  const uploadInline = (dataUrl: string) =>
+    uploadCompanyImage(dataUrlToFile(dataUrl, "from-report"));
 
   const registerImages = (images: ExtractedImage[]) => {
     if (!images.length) return;
@@ -846,6 +857,7 @@ function ImportPanel({
       const content = await file.text();
       if (isHtmlFile(file)) {
         sawHtml = true;
+        setHtmlSource(content);
         const { text, images } = parseHtmlDump(content);
         texts.push(`--- ${file.name} (HTML → text) ---\n${text}`);
         collected.push(...images);
@@ -868,11 +880,63 @@ function ImportPanel({
     }
   };
 
+  /** Upload inline images, then hand the finished profile back and clear the bar. */
+  const finish = async (
+    draft: CompanyProfile,
+    meta: { name?: string; tagline?: string } | undefined,
+    doneMessage: string,
+    base = 55,
+  ) => {
+    setPhase("Placing charts, graphs & maps…");
+    let profile = normalizeProfile(draft);
+    profile = await materializeProfileImages(profile, uploadInline, (done, total) =>
+      setProgress(base + Math.round((done / Math.max(total, 1)) * (98 - base))),
+    );
+    profile = normalizeProfile(profile);
+    setPhase("Building the profile…");
+    setProgress(100);
+    onParsed(profile, meta);
+    toast.success(doneMessage);
+    window.setTimeout(() => {
+      setProgress(0);
+      setPhase("");
+    }, 600);
+  };
+
   const run = async () => {
-    if (!raw.trim()) {
+    if (!raw.trim() && !htmlSource) {
       toast.error("Paste or drop some research data first");
       return;
     }
+
+    const pastedHtml = /^\s*(<!doctype html|<html[\s>]|<body[\s>])/i.test(raw) ? raw : "";
+    const reportHtml = htmlSource || pastedHtml;
+
+    // 1) Free path: a "Company Research Report" HTML template parses locally.
+    if (reportHtml) {
+      const report = parseResearchReport(reportHtml);
+      if (report) {
+        setBusy(true);
+        setPhase("Reading the research report…");
+        setProgress(30);
+        try {
+          await finish(
+            report.profile,
+            { name: report.name, tagline: report.tagline },
+            "Imported the research report — no AI credits used",
+          );
+        } catch (error) {
+          setProgress(0);
+          setPhase("");
+          toast.error((error as Error).message);
+        } finally {
+          setBusy(false);
+        }
+        return;
+      }
+    }
+
+    // 2) Fall back to the AI for freeform dumps.
     let payload = raw;
     let images = parsedImages;
     const merge = (found: ExtractedImage[]) => {
@@ -881,9 +945,7 @@ function ImportPanel({
       const seen = new Set(images.map((im) => im.src));
       images = [...images, ...found.filter((im) => !seen.has(im.src))];
     };
-    // If the pasted text is itself an HTML document, reduce it to text first;
-    // otherwise treat it as markdown and pull any image references out.
-    if (/^\s*(<!doctype html|<html[\s>]|<body[\s>])/i.test(raw)) {
+    if (pastedHtml) {
       const parsed = parseHtmlDump(raw);
       payload = parsed.text;
       merge(parsed.images);
@@ -921,26 +983,10 @@ function ImportPanel({
         return;
       }
       setProgress(82);
-      let profile = normalizeProfile(result.profile);
-      if (images.length) {
-        setPhase("Placing charts, graphs & maps…");
-        profile = normalizeProfile(matchHtmlImages(profile, images));
-        profile = await materializeProfileImages(
-          profile,
-          (dataUrl) => uploadCompanyImage(dataUrlToFile(dataUrl, "from-html")),
-          (done, total) =>
-            setProgress(82 + Math.round((done / Math.max(total, 1)) * 16)),
-        );
-        profile = normalizeProfile(profile);
-      }
-      setPhase("Building the profile…");
-      setProgress(100);
-      onParsed(profile);
-      toast.success("Data structured — review the blocks and save");
-      window.setTimeout(() => {
-        setProgress(0);
-        setPhase("");
-      }, 600);
+      const structured = images.length
+        ? matchHtmlImages(normalizeProfile(result.profile), images)
+        : normalizeProfile(result.profile);
+      await finish(structured, undefined, "Data structured — review the blocks and save", 82);
     } catch (error) {
       window.clearInterval(tick);
       setProgress(0);
@@ -970,10 +1016,10 @@ function ImportPanel({
         }`}
       >
         <Upload className="mb-3 size-6 text-muted-foreground" />
-        <p className="text-sm font-medium">Drop markdown, HTML, text or CSV dumps here</p>
+        <p className="text-sm font-medium">Drop a research report (HTML), or a markdown / text dump</p>
         <p className="text-xs text-muted-foreground">
-          Anything works — Claude MD or HTML exports, meeting notes, pasted tables. Charts, mix
-          graphs and engagement maps inside an HTML file are extracted and placed automatically.
+          A “Company Research Report” HTML file is parsed here directly — no AI, no credits — with
+          all its charts and maps. Other dumps use AI to structure them.
         </p>
         <input
           ref={inputRef}
@@ -984,7 +1030,13 @@ function ImportPanel({
           onChange={(e) => void readFiles(e.target.files)}
         />
       </div>
-      {parsedImages.length > 0 ? (
+      {looksLikeResearchReport(htmlSource || raw) ? (
+        <p className="flex items-center gap-2 rounded-lg bg-good-soft px-3 py-2 text-xs font-semibold text-good-foreground">
+          <FileCode className="size-4" />
+          Research report detected — “Structure into blocks” will parse it locally, no AI credits
+          used.
+        </p>
+      ) : parsedImages.length > 0 ? (
         <p className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
           <FileCode className="size-4" />
           {parsedImages.length} image{parsedImages.length > 1 ? "s" : ""} ready — “Structure into
@@ -994,9 +1046,12 @@ function ImportPanel({
 
       <Textarea
         rows={12}
-        placeholder="…or paste the raw research dump here"
+        placeholder="…or paste the raw research dump (or a full HTML report) here"
         value={raw}
-        onChange={(e) => setRaw(e.target.value)}
+        onChange={(e) => {
+          setRaw(e.target.value);
+          setHtmlSource("");
+        }}
       />
 
       {busy || progress > 0 ? (
