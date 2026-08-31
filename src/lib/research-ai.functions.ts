@@ -44,6 +44,7 @@ const PROFILE_SHAPE = `{
     }
   ],
   "verticalsNote": "optional framing note about how the verticals are defined / what is / isn't a standard BU",
+  "verticalsImageCaption": "1-2 sentences on what a group-level revenue-split / segment-mix chart shows (the app attaches the image)",
   "verticals": [
     {
       "name": "BU / vertical name",

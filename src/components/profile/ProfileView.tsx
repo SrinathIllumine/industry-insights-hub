@@ -286,34 +286,8 @@ export function ProfileView({ profile }: { profile: CompanyProfile }) {
     <div className="space-y-4">
       {/* Block I — Financials */}
       <CollapsibleCard index="I" title="Financial Performance" defaultOpen>
-        <div className="grid gap-4 sm:grid-cols-3">
-          <div className="rounded-2xl bg-primary p-6 text-primary-foreground">
-            <span className="text-[11px] font-bold uppercase tracking-widest opacity-70">
-              Overall verdict
-            </span>
-            <p className="mt-2 font-display text-2xl font-bold">{fin.verdict || "Not assessed"}</p>
-            {fin.verdictNote ? (
-              <p className="mt-3 text-sm opacity-80">{fin.verdictNote}</p>
-            ) : null}
-          </div>
-          <div className="rounded-2xl bg-muted p-6">
-            <span className="label-caps">Company revenue CAGR</span>
-            <p className="font-display text-3xl font-bold text-foreground">
-              {fin.revenueCagr || "—"}
-            </p>
-            <span className="text-[11px] font-medium text-muted-foreground">5-year growth rate</span>
-          </div>
-          <div className="rounded-2xl bg-muted p-6">
-            <span className="label-caps">Industry revenue CAGR</span>
-            <p className="font-display text-3xl font-bold text-foreground">
-              {fin.industryCagr || "—"}
-            </p>
-            <span className="text-[11px] font-medium text-muted-foreground">5-year growth rate</span>
-          </div>
-        </div>
-
         {charts.length > 0 ? (
-          <div className="mt-6 grid gap-6 md:grid-cols-2">
+          <div className="grid gap-6 md:grid-cols-2">
             {charts.map((chart, i) => (
               <ImageFigure
                 key={i}
@@ -324,6 +298,38 @@ export function ProfileView({ profile }: { profile: CompanyProfile }) {
             ))}
           </div>
         ) : null}
+
+        <div className={cn("grid gap-3 sm:grid-cols-3", charts.length > 0 && "mt-6")}>
+          <div className="rounded-xl bg-primary px-4 py-3 text-primary-foreground">
+            <span className="text-[10px] font-bold uppercase tracking-widest opacity-70">
+              Overall verdict
+            </span>
+            <p className="mt-0.5 font-display text-base font-bold">
+              {fin.verdict || "Not assessed"}
+            </p>
+            {fin.verdictNote ? (
+              <p className="mt-1 text-xs opacity-80">{fin.verdictNote}</p>
+            ) : null}
+          </div>
+          <div className="rounded-xl bg-muted px-4 py-3">
+            <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+              Company revenue CAGR
+            </span>
+            <p className="mt-0.5 font-display text-lg font-bold text-foreground">
+              {fin.revenueCagr || "—"}
+              <span className="ml-1 text-[10px] font-medium text-muted-foreground">5-yr</span>
+            </p>
+          </div>
+          <div className="rounded-xl bg-muted px-4 py-3">
+            <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+              Industry revenue CAGR
+            </span>
+            <p className="mt-0.5 font-display text-lg font-bold text-foreground">
+              {fin.industryCagr || "—"}
+              <span className="ml-1 text-[10px] font-medium text-muted-foreground">5-yr</span>
+            </p>
+          </div>
+        </div>
 
         {hasTable ? (
           <div className="mt-6">
@@ -388,6 +394,16 @@ export function ProfileView({ profile }: { profile: CompanyProfile }) {
         {profile.verticalsNote ? (
           <div className="mb-6">
             <Callout label="How these verticals are defined" text={profile.verticalsNote} />
+          </div>
+        ) : null}
+        {profile.verticalsImageUrl ? (
+          <div className="mb-6">
+            <ImageFigure
+              src={profile.verticalsImageUrl}
+              title="Business verticals overview"
+              caption={profile.verticalsImageCaption}
+              className="mx-auto max-w-2xl"
+            />
           </div>
         ) : null}
         {profile.verticals.length === 0 ? (
@@ -470,7 +486,7 @@ export function ProfileView({ profile }: { profile: CompanyProfile }) {
 
       {/* Financial data table popup */}
       <Dialog open={tableOpen} onOpenChange={setTableOpen}>
-        <DialogContent className="max-w-3xl">
+        <DialogContent className="max-h-[85vh] max-w-3xl overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Financial data{fin.unit ? ` (${fin.unit})` : ""}</DialogTitle>
           </DialogHeader>
@@ -520,7 +536,7 @@ export function ProfileView({ profile }: { profile: CompanyProfile }) {
 
       {/* Vertical click-in popups */}
       <Dialog open={!!popup} onOpenChange={(v) => !v && setPopup(null)}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-h-[85vh] max-w-2xl overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
               {popup?.v.name} — {popup ? POPUP_TITLE[popup.kind] : ""}
@@ -582,12 +598,11 @@ function VerticalColumn({
 }) {
   const hasRevenue =
     !!v.revenueValue || !!v.revenueGrowth || v.revenueContributors.length > 0 || !!v.revenueDetails;
-  const engagementCount =
-    v.engagementModel.length +
-    v.channelStats.length +
-    v.dealerChannelTypes.length +
-    (v.engagementMapUrl ? 1 : 0) +
-    (v.channelMethodology ? 1 : 0);
+  const hasEngagement =
+    v.engagementModel.length > 0 ||
+    v.channelStats.length > 0 ||
+    !!v.engagementMapUrl ||
+    !!v.channelMethodology;
 
   return (
     <div className="relative w-[400px] shrink-0 border-l-2 border-primary pl-8">
@@ -652,12 +667,6 @@ function VerticalColumn({
         </div>
       ) : null}
 
-      {v.revenueInsight ? (
-        <div className="mb-4">
-          <Callout label="What really drives this vertical" text={v.revenueInsight} />
-        </div>
-      ) : null}
-
       <div className="space-y-2">
         {v.stakeholders.length > 0 ? (
           <ClickIn
@@ -666,10 +675,9 @@ function VerticalColumn({
             onClick={() => onOpen("stakeholders")}
           />
         ) : null}
-        {engagementCount > 0 ? (
+        {hasEngagement ? (
           <ClickIn
-            label={v.channelModelName || "Channel engagement model"}
-            count={engagementCount}
+            label="Channel engagement model"
             onClick={() => onOpen("engagementModel")}
           />
         ) : null}
@@ -691,7 +699,6 @@ function ChannelEngagement({ v }: { v: Vertical }) {
     v.engagementModel.length > 0 ||
     !!v.engagementMapUrl ||
     v.channelStats.length > 0 ||
-    v.dealerChannelTypes.length > 0 ||
     !!v.channelMethodology;
 
   if (!hasAnything) {
@@ -734,21 +741,6 @@ function ChannelEngagement({ v }: { v: Vertical }) {
                   {s.label}
                 </p>
               </div>
-            ))}
-          </div>
-        </SubCard>
-      ) : null}
-
-      {v.dealerChannelTypes.length > 0 ? (
-        <SubCard title="Types of dealers & channels">
-          <div className="flex flex-wrap gap-2">
-            {v.dealerChannelTypes.map((t, i) => (
-              <span
-                key={i}
-                className="rounded-full border border-border bg-card px-3 py-1 text-xs font-medium text-foreground"
-              >
-                {t}
-              </span>
             ))}
           </div>
         </SubCard>

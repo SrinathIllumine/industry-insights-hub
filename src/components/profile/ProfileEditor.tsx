@@ -495,6 +495,18 @@ export function ProfileEditor({
             value={profile.verticalsNote}
             onChange={(v) => setProfile({ ...profile, verticalsNote: v })}
           />
+          <div className="space-y-4 rounded-xl border border-border bg-muted/30 p-4">
+            <ImageField
+              label="Business verticals overview image (e.g. group revenue split)"
+              value={profile.verticalsImageUrl}
+              onChange={(v) => setProfile({ ...profile, verticalsImageUrl: v })}
+            />
+            <Field
+              label="Overview image caption"
+              value={profile.verticalsImageCaption}
+              onChange={(v) => setProfile({ ...profile, verticalsImageCaption: v })}
+            />
+          </div>
           {profile.verticals.map((v, i) => {
             const update = (patch: Partial<Vertical>) => {
               const verticals = [...profile.verticals];

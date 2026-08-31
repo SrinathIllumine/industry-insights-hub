@@ -63,6 +63,17 @@ export function matchHtmlImages(
       v.mixChartUrl = take((im) => MIX_RE.test(hay(im)) && !MAP_RE.test(hay(im)));
   }
 
+  // Group-level verticals overview image (a revenue-split / mix chart that
+  // sits before the individual verticals and isn't a map).
+  if (!next.verticalsImageUrl) {
+    next.verticalsImageUrl = take(
+      (im) =>
+        MIX_RE.test(hay(im)) &&
+        !MAP_RE.test(hay(im)) &&
+        /vertical|segment|group|business unit|\bbu\b|split/i.test(im.context),
+    );
+  }
+
   // Financial narrative chart
   const finSrc = take((im) => FIN_RE.test(hay(im)) && !MAP_RE.test(hay(im)));
   if (finSrc) {
@@ -102,6 +113,7 @@ export function matchHtmlImages(
 export function countInlineImages(profile: CompanyProfile): number {
   const urls = [
     profile.financials.benchmarkImageUrl,
+    profile.verticalsImageUrl,
     ...profile.financials.charts.map((c) => c.imageUrl),
     ...profile.verticals.flatMap((v) => [v.mixChartUrl, v.engagementMapUrl]),
   ];
@@ -138,6 +150,7 @@ export async function materializeProfileImages(
   };
 
   next.financials.benchmarkImageUrl = await swap(next.financials.benchmarkImageUrl);
+  next.verticalsImageUrl = await swap(next.verticalsImageUrl);
   for (const c of next.financials.charts) c.imageUrl = await swap(c.imageUrl);
   next.financials.charts = next.financials.charts.filter(
     (c) => c.imageUrl || c.title || c.caption,

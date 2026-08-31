@@ -319,6 +319,9 @@ export type CompanyProfile = {
   challenges: Challenge[];
   /** Optional framing note shown above the business verticals. */
   verticalsNote: string;
+  /** Optional overview image for the whole Business Verticals block (e.g. group revenue split). */
+  verticalsImageUrl: string;
+  verticalsImageCaption: string;
   verticals: Vertical[];
   initiatives: Initiative[];
   partnerContributions: PartnerContribution[];
@@ -363,6 +366,8 @@ export const emptyProfile = (): CompanyProfile => ({
   financials: emptyFinancials(),
   challenges: [],
   verticalsNote: "",
+  verticalsImageUrl: "",
+  verticalsImageCaption: "",
   verticals: [],
   initiatives: [],
   partnerContributions: [],
@@ -390,6 +395,9 @@ export function normalizeProfile(raw: unknown): CompanyProfile {
     },
     challenges: Array.isArray(p.challenges) ? p.challenges.map(normalizeChallenge) : [],
     verticalsNote: typeof p.verticalsNote === "string" ? p.verticalsNote : "",
+    verticalsImageUrl: typeof p.verticalsImageUrl === "string" ? p.verticalsImageUrl : "",
+    verticalsImageCaption:
+      typeof p.verticalsImageCaption === "string" ? p.verticalsImageCaption : "",
     verticals: Array.isArray(p.verticals) ? p.verticals.map(normalizeVertical) : [],
     initiatives: Array.isArray(p.initiatives) ? p.initiatives : [],
     partnerContributions: Array.isArray(p.partnerContributions) ? p.partnerContributions : [],
