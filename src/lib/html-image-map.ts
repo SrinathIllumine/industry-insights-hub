@@ -98,12 +98,25 @@ export function matchHtmlImages(
  * Uploads any inline `data:` images referenced by the profile and swaps in the
  * hosted URLs, so the saved profile never carries a multi-MB data URI.
  */
+/** Count of inline data: images a profile carries (for progress reporting). */
+export function countInlineImages(profile: CompanyProfile): number {
+  const urls = [
+    profile.financials.benchmarkImageUrl,
+    ...profile.financials.charts.map((c) => c.imageUrl),
+    ...profile.verticals.flatMap((v) => [v.mixChartUrl, v.engagementMapUrl]),
+  ];
+  return urls.filter((u) => /^data:/i.test(u)).length;
+}
+
 export async function materializeProfileImages(
   profile: CompanyProfile,
   upload: (dataUrl: string) => Promise<string>,
+  onProgress?: (done: number, total: number) => void,
 ): Promise<CompanyProfile> {
   const next: CompanyProfile = structuredClone(profile);
+  const total = countInlineImages(next);
   const cache = new Map<string, string>();
+  let done = 0;
 
   const swap = async (url: string): Promise<string> => {
     if (!url || !/^data:/i.test(url)) return url;
@@ -119,6 +132,8 @@ export async function materializeProfileImages(
       /* keep the inline data URI */
     }
     cache.set(url, out);
+    done += 1;
+    onProgress?.(done, total);
     return out;
   };
 

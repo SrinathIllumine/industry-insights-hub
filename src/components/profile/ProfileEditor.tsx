@@ -27,6 +27,7 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Progress } from "@/components/ui/progress";
 import {
   Dialog,
   DialogContent,
@@ -809,6 +810,8 @@ function ImportPanel({
   const [busy, setBusy] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [parsedImages, setParsedImages] = useState<ExtractedImage[]>([]);
+  const [progress, setProgress] = useState(0);
+  const [phase, setPhase] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
   const structure = useServerFn(structureResearchDump);
 
@@ -878,6 +881,15 @@ function ImportPanel({
     }
 
     setBusy(true);
+    setPhase("Structuring with AI…");
+    setProgress(6);
+    // Ease progress toward ~80% while we wait on the model (unknown duration).
+    let p = 6;
+    const tick = window.setInterval(() => {
+      p = p + (80 - p) * 0.05;
+      setProgress(Math.round(p));
+    }, 500);
+
     try {
       const result = await structure({
         data: {
@@ -889,22 +901,38 @@ function ImportPanel({
           illumineModels: settings.illumine_models,
         },
       });
+      window.clearInterval(tick);
       if (!result.ok) {
+        setProgress(0);
+        setPhase("");
         toast.error(result.error);
         return;
       }
+      setProgress(82);
       let profile = normalizeProfile(result.profile);
       if (images.length) {
-        profile = matchHtmlImages(profile, images);
-        profile = normalizeProfile(profile);
-        profile = await materializeProfileImages(profile, (dataUrl) =>
-          uploadCompanyImage(dataUrlToFile(dataUrl, "from-html")),
+        setPhase("Placing charts, graphs & maps…");
+        profile = normalizeProfile(matchHtmlImages(profile, images));
+        profile = await materializeProfileImages(
+          profile,
+          (dataUrl) => uploadCompanyImage(dataUrlToFile(dataUrl, "from-html")),
+          (done, total) =>
+            setProgress(82 + Math.round((done / Math.max(total, 1)) * 16)),
         );
         profile = normalizeProfile(profile);
       }
+      setPhase("Building the profile…");
+      setProgress(100);
       onParsed(profile);
       toast.success("Data structured — review the blocks and save");
+      window.setTimeout(() => {
+        setProgress(0);
+        setPhase("");
+      }, 600);
     } catch (error) {
+      window.clearInterval(tick);
+      setProgress(0);
+      setPhase("");
       toast.error((error as Error).message);
     } finally {
       setBusy(false);
@@ -958,6 +986,16 @@ function ImportPanel({
         value={raw}
         onChange={(e) => setRaw(e.target.value)}
       />
+
+      {busy || progress > 0 ? (
+        <div className="space-y-1.5 rounded-xl border border-border bg-muted/40 p-4">
+          <div className="flex items-center justify-between text-xs font-medium text-muted-foreground">
+            <span>{phase || "Working…"}</span>
+            <span>{Math.min(progress, 100)}%</span>
+          </div>
+          <Progress value={Math.min(progress, 100)} />
+        </div>
+      ) : null}
 
       <div className="flex items-center justify-between">
         <p className="text-xs text-muted-foreground">
