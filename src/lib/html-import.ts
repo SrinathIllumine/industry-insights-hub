@@ -153,6 +153,56 @@ export function parseHtmlDump(html: string): ParsedHtml {
   return { text, images };
 }
 
+/** Pulls image references out of a markdown / plain-text dump. */
+export function parseMarkdownImages(md: string): ExtractedImage[] {
+  const out: ExtractedImage[] = [];
+  const seen = new Set<string>();
+  const lines = md.split(/\r?\n/);
+  let heading = "";
+
+  const push = (rawSrc: string, alt: string, ctx: string) => {
+    const s = rawSrc.trim().replace(/^<|>$/g, "");
+    if (!s || seen.has(s)) return;
+    if (!/^(https?:|\/\/|data:image\/)/i.test(s)) return;
+    seen.add(s);
+    out.push({
+      src: s.startsWith("//") ? `https:${s}` : s,
+      alt: alt.trim(),
+      context: ctx.replace(/\s+/g, " ").trim().slice(0, 320),
+    });
+  };
+
+  lines.forEach((line, i) => {
+    const hm = /^#{1,6}\s+(.*)/.exec(line);
+    if (hm) heading = hm[1] ?? "";
+    const near = lines.slice(Math.max(0, i - 2), i + 1).join(" ");
+
+    const mdImg = /!\[([^\]]*)\]\(\s*(<[^>]+>|[^)\s]+)(?:\s+["'][^"']*["'])?\s*\)/g;
+    let m: RegExpExecArray | null;
+    while ((m = mdImg.exec(line))) {
+      const alt = m[1] ?? "";
+      push(m[2] ?? "", alt, `${heading} ${near} ${alt}`);
+    }
+
+    const htmlImg = /<img\b[^>]*\bsrc=["']([^"']+)["'][^>]*>/gi;
+    while ((m = htmlImg.exec(line))) {
+      const tag = m[0];
+      const alt = /\balt=["']([^"']*)["']/i.exec(tag)?.[1] ?? "";
+      push(m[1] ?? "", alt, `${heading} ${near} ${alt}`);
+    }
+  });
+
+  return out;
+}
+
+/** Replaces heavy inline base64 image data with a placeholder so a dump can be
+ *  sent to the model without blowing the token budget. */
+export function stripInlineImageData(text: string): string {
+  return text
+    .replace(/!\[([^\]]*)\]\(\s*data:[^)]*\)/gi, "![$1](embedded-image)")
+    .replace(/data:image\/[a-z0-9.+-]+;[^\s"')]{80,}/gi, "[embedded image]");
+}
+
 /** Converts a data: URL to a File so it can be uploaded to storage. */
 export function dataUrlToFile(dataUrl: string, name = "pasted-image"): File {
   const comma = dataUrl.indexOf(",");

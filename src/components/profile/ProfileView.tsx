@@ -393,9 +393,9 @@ export function ProfileView({ profile }: { profile: CompanyProfile }) {
         {profile.verticals.length === 0 ? (
           <Empty text="No business verticals captured yet." />
         ) : (
-          <div className="space-y-6">
+          <div className="flex gap-10 overflow-x-auto pb-4">
             {profile.verticals.map((v, i) => (
-              <VerticalCard key={i} v={v} onOpen={(kind) => setPopup({ v, kind })} />
+              <VerticalColumn key={i} v={v} onOpen={(kind) => setPopup({ v, kind })} />
             ))}
           </div>
         )}
@@ -421,7 +421,16 @@ export function ProfileView({ profile }: { profile: CompanyProfile }) {
                 {profile.initiatives.map((row, i) => (
                   <tr key={i} className="border-t border-border align-top">
                     <td className="p-4 font-medium">{row.area}</td>
-                    <td className="p-4">{row.category}</td>
+                    <td className="p-4">
+                      {row.category ? (
+                        <span
+                          className="inline-block rounded-full px-2.5 py-0.5 text-[11px] font-bold text-white"
+                          style={{ backgroundColor: categoryColor(row.category) }}
+                        >
+                          {row.category}
+                        </span>
+                      ) : null}
+                    </td>
                     <td className="p-4 font-medium">{row.initiative}</td>
                     <td className="p-4 text-muted-foreground">{row.whatItDoes}</td>
                     <td className="p-4 text-muted-foreground">{row.howItIsDone}</td>
@@ -551,7 +560,20 @@ export function ProfileView({ profile }: { profile: CompanyProfile }) {
 
 /* ---------- verticals ---------- */
 
-function VerticalCard({
+const CATEGORY_COLORS: { match: RegExp; color: string }[] = [
+  { match: /technolog/i, color: "#2E75B6" },
+  { match: /train/i, color: "#548235" },
+  { match: /process/i, color: "#BF8F00" },
+  { match: /financ/i, color: "#7030A0" },
+  { match: /capacity|infra/i, color: "#C00000" },
+  { match: /sustainab/i, color: "#375623" },
+];
+
+function categoryColor(category: string): string {
+  return CATEGORY_COLORS.find((c) => c.match.test(category))?.color ?? "#64748b";
+}
+
+function VerticalColumn({
   v,
   onOpen,
 }: {
@@ -568,72 +590,75 @@ function VerticalCard({
     (v.channelMethodology ? 1 : 0);
 
   return (
-    <div className="rounded-2xl border border-border bg-muted/20 p-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h4 className="font-display text-2xl font-bold text-foreground">{v.name}</h4>
-          {v.description ? (
-            <p className="mt-1 text-sm text-muted-foreground">{v.description}</p>
-          ) : null}
-        </div>
+    <div className="relative w-[400px] shrink-0 border-l-2 border-primary pl-8">
+      <span className="absolute -left-[11px] top-0 size-5 rounded-full border-4 border-primary bg-card" />
+
+      <div className="mb-4">
+        <h4 className="font-display text-2xl font-bold text-foreground">{v.name}</h4>
+        {v.description ? (
+          <p className="mt-2 text-sm text-muted-foreground">{v.description}</p>
+        ) : null}
         {v.shareOfRevenue ? (
-          <span className="rounded-full bg-primary px-3 py-1 text-[11px] font-bold uppercase text-primary-foreground">
+          <span className="mt-2 inline-block rounded-full bg-primary px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-primary-foreground">
             {v.shareOfRevenue}
           </span>
         ) : null}
       </div>
 
       {v.basicDetails ? (
-        <p className="mt-3 whitespace-pre-line text-sm text-foreground">{v.basicDetails}</p>
+        <div className="mb-4">
+          <span className="label-caps">Basic details</span>
+          <p className="mt-1 whitespace-pre-line text-sm text-foreground">{v.basicDetails}</p>
+        </div>
       ) : null}
 
-      <div className="mt-5 grid gap-5 md:grid-cols-2">
-        {hasRevenue ? (
-          <div className="rounded-xl border border-border bg-card p-4">
-            <span className="label-caps">Revenue</span>
-            <div className="mt-1 flex flex-wrap items-baseline gap-x-3 gap-y-1">
-              <span className="font-display text-2xl font-bold text-foreground">
-                {v.revenueValue || "—"}
+      {hasRevenue ? (
+        <div className="mb-4 rounded-xl border border-border bg-muted/40 p-4">
+          <span className="label-caps">Revenue</span>
+          <div className="mt-1 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+            <span className="font-display text-xl font-bold text-foreground">
+              {v.revenueValue || "—"}
+            </span>
+            {v.revenueGrowth ? (
+              <span className="rounded-full bg-good-soft px-2 py-0.5 text-xs font-bold text-good-foreground">
+                {v.revenueGrowth}
               </span>
-              {v.revenueGrowth ? (
-                <span className="rounded-full bg-good-soft px-2 py-0.5 text-xs font-bold text-good-foreground">
-                  {v.revenueGrowth}
-                </span>
-              ) : null}
-            </div>
-            {v.revenueDetails ? (
-              <p className="mt-2 whitespace-pre-line text-sm text-muted-foreground">
-                {v.revenueDetails}
-              </p>
-            ) : null}
-            {v.revenueContributors.length > 0 ? (
-              <div className="mt-3">
-                <span className="label-caps">Major contributors</span>
-                <ul className="mt-1 space-y-1.5">
-                  {v.revenueContributors.map((c, i) => (
-                    <li key={i} className="text-sm text-foreground">
-                      <span className="font-semibold">{c.name}</span>
-                      {c.detail ? <span className="text-muted-foreground"> — {c.detail}</span> : null}
-                    </li>
-                  ))}
-                </ul>
-              </div>
             ) : null}
           </div>
-        ) : null}
+          {v.revenueDetails ? (
+            <p className="mt-2 whitespace-pre-line text-sm text-muted-foreground">
+              {v.revenueDetails}
+            </p>
+          ) : null}
+          {v.revenueContributors.length > 0 ? (
+            <div className="mt-3">
+              <span className="label-caps">Major contributors</span>
+              <ul className="mt-1 space-y-1.5">
+                {v.revenueContributors.map((c, i) => (
+                  <li key={i} className="text-sm text-foreground">
+                    <span className="font-semibold">{c.name}</span>
+                    {c.detail ? <span className="text-muted-foreground"> — {c.detail}</span> : null}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
 
-        {v.mixChartUrl ? (
+      {v.mixChartUrl ? (
+        <div className="mb-4">
           <ImageFigure src={v.mixChartUrl} title="Revenue / volume mix" caption={v.mixChartCaption} />
-        ) : null}
-      </div>
+        </div>
+      ) : null}
 
       {v.revenueInsight ? (
-        <div className="mt-5">
+        <div className="mb-4">
           <Callout label="What really drives this vertical" text={v.revenueInsight} />
         </div>
       ) : null}
 
-      <div className="mt-5 flex flex-wrap gap-2">
+      <div className="space-y-2">
         {v.stakeholders.length > 0 ? (
           <ClickIn
             label="Stakeholders"
@@ -755,7 +780,7 @@ function ClickIn({
       variant={highlight ? "secondary" : "ghost"}
       onClick={onClick}
       className={cn(
-        "justify-between gap-2 rounded-lg bg-muted px-4 py-3 text-sm font-medium hover:bg-accent",
+        "w-full justify-between gap-2 rounded-lg bg-muted px-4 py-3 text-left text-sm font-medium hover:bg-accent",
         highlight && "bg-good-soft text-good-foreground hover:bg-good-soft/80 font-bold",
       )}
     >

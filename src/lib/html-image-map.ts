@@ -109,11 +109,14 @@ export async function materializeProfileImages(
     if (!url || !/^data:/i.test(url)) return url;
     const cached = cache.get(url);
     if (cached !== undefined) return cached;
-    let out = "";
+    // Keep the inline data URI as the fallback so the image always renders,
+    // even when storage upload is unavailable.
+    let out = url;
     try {
-      out = await upload(url);
+      const uploaded = await upload(url);
+      if (uploaded) out = uploaded;
     } catch {
-      out = "";
+      /* keep the inline data URI */
     }
     cache.set(url, out);
     return out;

@@ -4,7 +4,14 @@ import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
 
 import { cn } from "@/lib/utils";
-import { dataUrlToFile, isHtmlFile, parseHtmlDump, type ExtractedImage } from "@/lib/html-import";
+import {
+  dataUrlToFile,
+  isHtmlFile,
+  parseHtmlDump,
+  parseMarkdownImages,
+  stripInlineImageData,
+  type ExtractedImage,
+} from "@/lib/html-import";
 import { matchHtmlImages, materializeProfileImages } from "@/lib/html-image-map";
 
 import { Button } from "@/components/ui/button";
@@ -828,7 +835,8 @@ function ImportPanel({
         texts.push(`--- ${file.name} (HTML → text) ---\n${text}`);
         collected.push(...images);
       } else {
-        texts.push(`--- ${file.name} ---\n${content}`);
+        texts.push(`--- ${file.name} ---\n${stripInlineImageData(content)}`);
+        collected.push(...parseMarkdownImages(content));
       }
     }
 
@@ -852,15 +860,21 @@ function ImportPanel({
     }
     let payload = raw;
     let images = parsedImages;
-    // If the pasted text is itself an HTML document, reduce it to text first.
+    const merge = (found: ExtractedImage[]) => {
+      if (!found.length) return;
+      registerImages(found);
+      const seen = new Set(images.map((im) => im.src));
+      images = [...images, ...found.filter((im) => !seen.has(im.src))];
+    };
+    // If the pasted text is itself an HTML document, reduce it to text first;
+    // otherwise treat it as markdown and pull any image references out.
     if (/^\s*(<!doctype html|<html[\s>]|<body[\s>])/i.test(raw)) {
       const parsed = parseHtmlDump(raw);
       payload = parsed.text;
-      if (parsed.images.length) {
-        registerImages(parsed.images);
-        const seen = new Set(images.map((im) => im.src));
-        images = [...images, ...parsed.images.filter((im) => !seen.has(im.src))];
-      }
+      merge(parsed.images);
+    } else {
+      payload = stripInlineImageData(raw);
+      merge(parseMarkdownImages(raw));
     }
 
     setBusy(true);

@@ -2,7 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
 const inputSchema = z.object({
-  raw: z.string().min(1).max(200000),
+  raw: z.string().min(1).max(1_200_000),
   companyName: z.string().max(200).default(""),
   themes: z.array(z.string()).default([]),
   challengeTags: z.array(z.string()).default([]),
