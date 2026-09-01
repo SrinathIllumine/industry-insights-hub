@@ -44,8 +44,15 @@ export type Quote = {
   sourceUrl: string;
 };
 
+export type ChallengeMood = "challenge" | "aspiration" | "";
+
 export type Challenge = {
+  /** The theme name (from the configured themes list). */
   theme: string;
+  /** The specific example / business context under that theme. */
+  themeExample: string;
+  /** Whether this reads as a challenge or an aspiration. */
+  mood: ChallengeMood;
   /** A thorough, plain-language explanation of the problem. */
   problem: string;
   /** Short "where this stands right now" line. */
@@ -57,11 +64,14 @@ export type Challenge = {
   sources: SourceLink[];
 };
 
-/** One Illumine model / solution mapped to a business vertical, with a note on
- *  how it could be configured for this specific company. */
+/** One Illumine model / solution mapped to a business vertical. */
 export type IllumineContribution = {
+  /** The stakeholder(s) involved, or the engagement between stakeholders — one field. */
+  stakeholders: string;
+  /** Name of the model / system. */
   model: string;
-  configuration: string;
+  /** What happens here. */
+  whatHappens: string;
 };
 
 /** A product / service / element that drives a meaningful share of a vertical's revenue. */
@@ -77,6 +87,32 @@ export type ChannelStat = {
   label: string;
   value: string;
 };
+
+/** A decision-making stakeholder inside a business vertical. */
+export type Stakeholder = {
+  name: string;
+  role: string;
+  photoUrl: string;
+  /** Where they sit in the org hierarchy (e.g. "Reports to the Group CEO"). */
+  hierarchy: string;
+  educationUG: string;
+  educationPG: string;
+  /** Current job / mandate. */
+  experienceCurrent: string;
+  /** Previous roles & companies. */
+  experiencePrevious: string;
+};
+
+export const emptyStakeholder = (): Stakeholder => ({
+  name: "",
+  role: "",
+  photoUrl: "",
+  hierarchy: "",
+  educationUG: "",
+  educationPG: "",
+  experienceCurrent: "",
+  experiencePrevious: "",
+});
 
 export type Vertical = {
   name: string;
@@ -99,8 +135,8 @@ export type Vertical = {
   mixChartCaption: string;
   /** e.g. "Dealer Franchise Model (dominant channel)". */
   channelModelName: string;
-  /** Decision-making stakeholders — one per line. */
-  stakeholders: string[];
+  /** Decision-making stakeholders. */
+  stakeholders: Stakeholder[];
   /** Readable bullet points — how the channel engagement works. */
   engagementModel: string[];
   /** Image URL of a small stakeholder engagement map. */
@@ -216,7 +252,38 @@ export function toStats(value: unknown): ChannelStat[] {
     .filter((s) => s.label || s.value);
 }
 
-/** Accepts stored IllumineContribution[] or a legacy free-text string. */
+export function toStakeholders(value: unknown): Stakeholder[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((x): Stakeholder => {
+      if (x && typeof x === "object") {
+        const o = x as Record<string, unknown>;
+        return {
+          name: str(o, "name"),
+          role: str(o, "role", "title", "designation"),
+          photoUrl: str(o, "photoUrl", "photo", "image", "pic"),
+          hierarchy: str(o, "hierarchy", "position", "level", "reportsTo"),
+          educationUG: str(o, "educationUG", "ug", "undergrad", "bachelors"),
+          educationPG: str(o, "educationPG", "pg", "postgrad", "masters"),
+          experienceCurrent: str(o, "experienceCurrent", "current", "currentRole"),
+          experiencePrevious: str(o, "experiencePrevious", "previous", "priorRoles", "past"),
+        };
+      }
+      // Legacy "Name — role — context" bullet string.
+      const parts = String(x)
+        .trim()
+        .split(/\s*[—–-]\s*/);
+      const [name, ...rest] = parts;
+      return {
+        ...emptyStakeholder(),
+        name: (name ?? "").trim(),
+        role: rest.join(" — ").trim(),
+      };
+    })
+    .filter((k) => k.name || k.role);
+}
+
+/** Accepts stored IllumineContribution[] (new or legacy shapes) or a free-text string. */
 export function toContributions(value: unknown): IllumineContribution[] {
   if (Array.isArray(value)) {
     return value
@@ -224,16 +291,17 @@ export function toContributions(value: unknown): IllumineContribution[] {
         if (x && typeof x === "object") {
           const o = x as Record<string, unknown>;
           return {
-            model: String(o["model"] ?? "").trim(),
-            configuration: String(o["configuration"] ?? o["config"] ?? "").trim(),
+            stakeholders: str(o, "stakeholders", "engagement", "who"),
+            model: str(o, "model", "system", "solution"),
+            whatHappens: str(o, "whatHappens", "what", "configuration", "config"),
           };
         }
-        return { model: String(x).trim(), configuration: "" };
+        return { stakeholders: "", model: String(x).trim(), whatHappens: "" };
       })
-      .filter((c) => c.model || c.configuration);
+      .filter((c) => c.stakeholders || c.model || c.whatHappens);
   }
   if (typeof value === "string" && value.trim()) {
-    return [{ model: "", configuration: value.trim() }];
+    return [{ stakeholders: "", model: "", whatHappens: value.trim() }];
   }
   return [];
 }
@@ -253,7 +321,7 @@ function normalizeVertical(raw: unknown): Vertical {
     mixChartUrl: str(v, "mixChartUrl", "mixChart", "chartUrl"),
     mixChartCaption: str(v, "mixChartCaption", "chartCaption"),
     channelModelName: str(v, "channelModelName", "channelModel", "engagementModelName"),
-    stakeholders: toBullets(v["stakeholders"] ?? v["decisionMakers"]),
+    stakeholders: toStakeholders(v["stakeholders"] ?? v["decisionMakers"]),
     engagementModel: toBullets(v["engagementModel"] ?? v["engagementSteps"]),
     engagementMapUrl: str(v, "engagementMapUrl", "engagementMap", "mapUrl"),
     channelStats: toStats(v["channelStats"] ?? v["channelNumbers"] ?? v["numbers"]),
@@ -275,8 +343,13 @@ function normalizeChallenge(raw: unknown): Challenge {
       sourceUrl: "",
     });
   }
+  const moodRaw = str(c, "mood").toLowerCase();
+  const mood: ChallengeMood =
+    moodRaw === "aspiration" ? "aspiration" : moodRaw === "challenge" ? "challenge" : "";
   return {
     theme: str(c, "theme", "category"),
+    themeExample: str(c, "themeExample", "example", "context"),
+    mood,
     problem: str(c, "problem", "explanation", "description"),
     status: str(c, "status", "currentStatus"),
     quotes,
@@ -300,6 +373,8 @@ function normalizeCharts(value: unknown): FinancialChart[] {
 }
 
 export type Initiative = {
+  /** Year the initiative was introduced. */
+  year: string;
   area: string;
   category: string;
   initiative: string;
@@ -307,12 +382,58 @@ export type Initiative = {
   howItIsDone: string;
 };
 
+function normalizeInitiatives(value: unknown): Initiative[] {
+  if (!Array.isArray(value)) return [];
+  return value.map((x) => {
+    const o = (x && typeof x === "object" ? x : {}) as Record<string, unknown>;
+    return {
+      year: str(o, "year", "introduced", "since"),
+      area: str(o, "area"),
+      category: str(o, "category"),
+      initiative: str(o, "initiative", "name"),
+      whatItDoes: str(o, "whatItDoes", "what"),
+      howItIsDone: str(o, "howItIsDone", "how"),
+    };
+  });
+}
+
+/** Engagement timeline entry (initial conversations → delivery). */
 export type PartnerContribution = {
   date: string;
   stage: string;
   title: string;
   description: string;
 };
+
+/** A reusable partner profile, stored in the `partners` table. */
+export type PartnerRole = {
+  organisation: string;
+  role: string;
+  period: string;
+};
+
+export type Partner = {
+  id: string;
+  name: string;
+  photo_url: string;
+  linkedin_url: string;
+  experience: PartnerRole[];
+  updated_at: string;
+};
+
+export function toPartnerRoles(value: unknown): PartnerRole[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((x) => {
+      const o = (x && typeof x === "object" ? x : {}) as Record<string, unknown>;
+      return {
+        organisation: str(o, "organisation", "organization", "company", "org"),
+        role: str(o, "role", "title", "designation"),
+        period: str(o, "period", "years", "duration", "when"),
+      };
+    })
+    .filter((r) => r.organisation || r.role || r.period);
+}
 
 export type CompanyProfile = {
   financials: Financials;
@@ -324,6 +445,8 @@ export type CompanyProfile = {
   verticalsImageCaption: string;
   verticals: Vertical[];
   initiatives: Initiative[];
+  /** IDs of partner profiles mapped to this company. */
+  associatedPartnerIds: string[];
   partnerContributions: PartnerContribution[];
 };
 
@@ -370,6 +493,7 @@ export const emptyProfile = (): CompanyProfile => ({
   verticalsImageCaption: "",
   verticals: [],
   initiatives: [],
+  associatedPartnerIds: [],
   partnerContributions: [],
 });
 
@@ -399,7 +523,10 @@ export function normalizeProfile(raw: unknown): CompanyProfile {
     verticalsImageCaption:
       typeof p.verticalsImageCaption === "string" ? p.verticalsImageCaption : "",
     verticals: Array.isArray(p.verticals) ? p.verticals.map(normalizeVertical) : [],
-    initiatives: Array.isArray(p.initiatives) ? p.initiatives : [],
+    initiatives: normalizeInitiatives(p.initiatives),
+    associatedPartnerIds: Array.isArray(p.associatedPartnerIds)
+      ? p.associatedPartnerIds.filter((x): x is string => typeof x === "string" && !!x)
+      : [],
     partnerContributions: Array.isArray(p.partnerContributions) ? p.partnerContributions : [],
   };
 }

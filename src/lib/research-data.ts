@@ -2,9 +2,12 @@ import { queryOptions } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import {
   normalizeProfile,
+  toPartnerRoles,
   type Company,
   type CompanyProfile,
   type Industry,
+  type Partner,
+  type PartnerRole,
 } from "./research-types";
 
 export const SETTING_KEYS = [
@@ -17,18 +20,84 @@ export const SETTING_KEYS = [
 ] as const;
 
 export type SettingKey = (typeof SETTING_KEYS)[number];
-export type SettingsMap = Record<SettingKey, string[]>;
+export type StringSettingKey = Exclude<SettingKey, "themes">;
+
+export type ThemeMood = "challenge" | "aspiration";
+/** A challenge / aspiration theme with several example business contexts. */
+export type Theme = {
+  name: string;
+  mood: ThemeMood;
+  examples: string[];
+};
+
+export function toThemes(value: unknown): Theme[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((x): Theme => {
+      if (x && typeof x === "object") {
+        const o = x as Record<string, unknown>;
+        const mood: ThemeMood =
+          String(o["mood"] ?? "").toLowerCase() === "aspiration" ? "aspiration" : "challenge";
+        const examples = Array.isArray(o["examples"])
+          ? (o["examples"] as unknown[]).map((e) => String(e).trim()).filter(Boolean)
+          : [];
+        return { name: String(o["name"] ?? o["title"] ?? "").trim(), mood, examples };
+      }
+      return { name: String(x).trim(), mood: "challenge", examples: [] };
+    })
+    .filter((t) => t.name);
+}
+
+export type SettingsMap = { themes: Theme[] } & Record<StringSettingKey, string[]>;
 
 /** Used when a settings row has never been created (e.g. before the seed
  *  migration runs), so the editor dropdowns are never empty. */
 export const SETTING_DEFAULTS: SettingsMap = {
   themes: [
-    "Preserving market leadership in a specific product/business line",
-    "Dealing with intense competition and potential loss of market position & reduced morale",
-    "Increased funding for aggressive growth/expansion of business - more dealers/network growth",
-    "Increase production capacity in new areas/locations leading to more dealers",
-    "Building future-ready talent and leadership pipeline",
-    "Driving digital and technology transformation",
+    {
+      name: "Preserving market leadership in a specific product / business line",
+      mood: "challenge",
+      examples: [
+        "Defending a category the company itself created as competitors scale fast",
+        "Holding share in the flagship product against aggressive new entrants",
+      ],
+    },
+    {
+      name: "Dealing with intense competition and a slipping market position",
+      mood: "challenge",
+      examples: [
+        "Running a clear second to the #1 player in a core segment",
+        "Reduced morale in the sales / channel organisation as share erodes",
+      ],
+    },
+    {
+      name: "Funding and executing aggressive growth / network expansion",
+      mood: "aspiration",
+      examples: [
+        "Adding dealers and widening the retail network at pace",
+        "Raising capital specifically to expand distribution",
+      ],
+    },
+    {
+      name: "Adding production capacity in new locations",
+      mood: "aspiration",
+      examples: ["New plants / lines opening up new dealer catchments"],
+    },
+    {
+      name: "Building a future-ready talent and leadership pipeline",
+      mood: "aspiration",
+      examples: ["Capability building for frontline sales & service teams"],
+    },
+    {
+      name: "Driving digital and technology transformation",
+      mood: "aspiration",
+      examples: ["Digitising lead generation and dealer operations end to end"],
+    },
+    {
+      name: "Absorbing a compound external / operational shock",
+      mood: "challenge",
+      examples: ["A cyberattack, tariff regime or supply shock hitting a key subsidiary at once"],
+    },
   ],
   challenge_tags: ["Company-wide business problem", "BU-specific"],
   financial_tags: ["High performing", "Moderate performing", "Low performing"],
@@ -58,11 +127,7 @@ export const SETTING_DEFAULTS: SettingsMap = {
   ],
 };
 
-export const SETTING_LABELS: Record<SettingKey, { title: string; help: string }> = {
-  themes: {
-    title: "Challenge themes",
-    help: "The finite list of themes used in the Business Challenge / Aspiration block.",
-  },
+export const SETTING_LABELS: Record<StringSettingKey, { title: string; help: string }> = {
   challenge_tags: {
     title: "Challenge tags",
     help: "Scope tags shown next to each challenge, e.g. company-wide or BU-specific.",
@@ -159,33 +224,46 @@ export const companyQuery = (id: string) =>
     },
   });
 
+const STRING_SETTING_KEYS: StringSettingKey[] = [
+  "challenge_tags",
+  "financial_tags",
+  "initiative_areas",
+  "engagement_stages",
+  "illumine_models",
+];
+
 export const settingsQuery = queryOptions({
   queryKey: ["settings"],
   queryFn: async (): Promise<SettingsMap> => {
     const { data, error } = await supabase.from("app_settings").select("key, value");
     if (error) throw error;
-    const seen = new Set<SettingKey>();
-    const map = {} as SettingsMap;
-    for (const key of SETTING_KEYS) map[key] = [];
-    for (const row of data ?? []) {
-      const key = row.key as SettingKey;
-      if (SETTING_KEYS.includes(key)) {
-        map[key] = Array.isArray(row.value) ? (row.value as string[]) : [];
-        seen.add(key);
-      }
-    }
-    // Fall back to sensible defaults for any list that has never been saved.
-    for (const key of SETTING_KEYS) {
-      if (!seen.has(key)) map[key] = [...SETTING_DEFAULTS[key]];
-    }
+    const rows = new Map<string, unknown>();
+    for (const row of data ?? []) rows.set(row.key as string, row.value);
+
+    const listOf = (key: StringSettingKey): string[] => {
+      if (!rows.has(key)) return [...SETTING_DEFAULTS[key]];
+      const v = rows.get(key);
+      return Array.isArray(v) ? (v as unknown[]).map((x) => String(x)) : [];
+    };
+
+    const map = { themes: [] } as unknown as SettingsMap;
+    map.themes = rows.has("themes") ? toThemes(rows.get("themes")) : [...SETTING_DEFAULTS.themes];
+    for (const key of STRING_SETTING_KEYS) map[key] = listOf(key);
     return map;
   },
 });
 
-export async function saveSetting(key: SettingKey, value: string[]) {
+export async function saveSetting(key: StringSettingKey, value: string[]) {
   const { error } = await supabase
     .from("app_settings")
     .upsert({ key, value }, { onConflict: "key" });
+  if (error) throw error;
+}
+
+export async function saveThemes(themes: Theme[]) {
+  const { error } = await supabase
+    .from("app_settings")
+    .upsert({ key: "themes", value: themes as never }, { onConflict: "key" });
   if (error) throw error;
 }
 
@@ -229,6 +307,58 @@ export async function saveCompany(input: {
 
 export async function deleteCompany(id: string) {
   const { error } = await supabase.from("companies").delete().eq("id", id);
+  if (error) throw error;
+}
+
+/* ---------------- partner profiles ---------------- */
+
+export const partnersQuery = queryOptions({
+  queryKey: ["partners"],
+  queryFn: async (): Promise<Partner[]> => {
+    const { data, error } = await supabase
+      .from("partners")
+      .select("id, name, photo_url, linkedin_url, experience, updated_at")
+      .order("name", { ascending: true });
+    // The `partners` table may not exist yet (migration pending) — degrade gracefully.
+    if (error) {
+      console.warn("partners query failed", error.message);
+      return [];
+    }
+    return (data ?? []).map((row) => {
+      const r = row as Record<string, unknown>;
+      return {
+        id: String(r["id"] ?? ""),
+        name: String(r["name"] ?? ""),
+        photo_url: String(r["photo_url"] ?? ""),
+        linkedin_url: String(r["linkedin_url"] ?? ""),
+        experience: toPartnerRoles(r["experience"]),
+        updated_at: String(r["updated_at"] ?? ""),
+      };
+    });
+  },
+});
+
+export async function upsertPartner(input: {
+  id?: string;
+  name: string;
+  photo_url: string;
+  linkedin_url: string;
+  experience: PartnerRole[];
+}): Promise<string> {
+  const row = {
+    ...(input.id ? { id: input.id } : {}),
+    name: input.name,
+    photo_url: input.photo_url,
+    linkedin_url: input.linkedin_url,
+    experience: input.experience as never,
+  };
+  const { data, error } = await supabase.from("partners").upsert(row).select("id").single();
+  if (error) throw error;
+  return (data as { id: string }).id;
+}
+
+export async function deletePartner(id: string) {
+  const { error } = await supabase.from("partners").delete().eq("id", id);
   if (error) throw error;
 }
 

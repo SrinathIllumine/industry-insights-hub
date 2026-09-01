@@ -32,6 +32,36 @@ export type Database = {
         }
         Relationships: []
       }
+      partners: {
+        Row: {
+          created_at: string
+          experience: Json
+          id: string
+          linkedin_url: string
+          name: string
+          photo_url: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          experience?: Json
+          id?: string
+          linkedin_url?: string
+          name: string
+          photo_url?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          experience?: Json
+          id?: string
+          linkedin_url?: string
+          name?: string
+          photo_url?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       companies: {
         Row: {
           created_at: string

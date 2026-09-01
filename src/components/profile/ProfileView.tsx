@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import { ChevronDown, ExternalLink, Maximize2, Table2 } from "lucide-react";
+import { ChevronDown, ExternalLink, Linkedin, Maximize2, Table2 } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -13,7 +13,9 @@ import type {
   CompanyProfile,
   FinancialChart,
   Grade,
+  Partner,
   Quote,
+  Stakeholder,
   Vertical,
 } from "@/lib/research-types";
 
@@ -94,6 +96,31 @@ function Callout({ label, text }: { label: string; text: string }) {
   );
 }
 
+function Avatar({ src, name, size = "size-12" }: { src: string; name: string; size?: string }) {
+  const initials = name
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((w) => w[0] ?? "")
+    .join("")
+    .toUpperCase();
+  return src ? (
+    <img
+      src={src}
+      alt={name}
+      className={cn("shrink-0 rounded-full border border-border object-cover", size)}
+    />
+  ) : (
+    <span
+      className={cn(
+        "grid shrink-0 place-items-center rounded-full border border-border bg-muted text-xs font-bold text-muted-foreground",
+        size,
+      )}
+    >
+      {initials || "—"}
+    </span>
+  );
+}
+
 /** Image thumbnail + caption that opens a zoom dialog. Renders nothing without an image. */
 function ImageFigure({
   src,
@@ -116,11 +143,7 @@ function ImageFigure({
           onClick={() => setZoom(true)}
           className="block w-full cursor-zoom-in bg-card"
         >
-          <img
-            src={src}
-            alt={title || "Chart"}
-            className="max-h-72 w-full object-contain p-3"
-          />
+          <img src={src} alt={title || "Chart"} className="max-h-72 w-full object-contain p-3" />
         </button>
         {title || caption ? (
           <figcaption className="space-y-1 border-t border-border p-4">
@@ -188,7 +211,7 @@ function ExpandableText({ text }: { text: string }) {
       <Dialog open={dialog} onOpenChange={setDialog}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Problem — full explanation</DialogTitle>
+            <DialogTitle>Full explanation</DialogTitle>
           </DialogHeader>
           <p className="max-h-[70vh] overflow-y-auto whitespace-pre-line text-[15px] leading-relaxed text-foreground">
             {text}
@@ -250,6 +273,16 @@ function QuoteBlock({ q }: { q: Quote }) {
   );
 }
 
+function Field({ label, value }: { label: string; value: string }) {
+  if (!value) return null;
+  return (
+    <div>
+      <span className="label-caps">{label}</span>
+      <p className="mt-0.5 whitespace-pre-line text-sm text-foreground">{value}</p>
+    </div>
+  );
+}
+
 /* ---------- main view ---------- */
 
 type VerticalPopup = {
@@ -263,7 +296,13 @@ const POPUP_TITLE: Record<VerticalPopup["kind"], string> = {
   contributions: "Illumine's potential contributions",
 };
 
-export function ProfileView({ profile }: { profile: CompanyProfile }) {
+export function ProfileView({
+  profile,
+  partners = [],
+}: {
+  profile: CompanyProfile;
+  partners?: Partner[];
+}) {
   const [tableOpen, setTableOpen] = useState(false);
   const [popup, setPopup] = useState<VerticalPopup | null>(null);
   const fin = profile.financials;
@@ -282,6 +321,8 @@ export function ProfileView({ profile }: { profile: CompanyProfile }) {
   ];
   const hasTable = fin.metrics.some((m) => m.values.some(Boolean));
   const soleChart = charts.length === 1 ? charts[0] : undefined;
+
+  const mappedPartners = partners.filter((p) => profile.associatedPartnerIds.includes(p.id));
 
   return (
     <div className="space-y-4">
@@ -308,18 +349,7 @@ export function ProfileView({ profile }: { profile: CompanyProfile }) {
           </div>
         ) : null}
 
-        <div className={cn("grid gap-3 sm:grid-cols-3", charts.length > 0 && "mt-6")}>
-          <div className="rounded-xl bg-primary px-4 py-3 text-primary-foreground">
-            <span className="text-[10px] font-bold uppercase tracking-widest opacity-70">
-              Overall verdict
-            </span>
-            <p className="mt-0.5 font-display text-base font-bold">
-              {fin.verdict || "Not assessed"}
-            </p>
-            {fin.verdictNote ? (
-              <p className="mt-1 text-xs opacity-80">{fin.verdictNote}</p>
-            ) : null}
-          </div>
+        <div className={cn("grid gap-3 sm:grid-cols-2", charts.length > 0 && "mt-6")}>
           <div className="rounded-xl bg-muted px-4 py-3">
             <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
               Company revenue CAGR
@@ -355,45 +385,65 @@ export function ProfileView({ profile }: { profile: CompanyProfile }) {
         ) : null}
       </CollapsibleCard>
 
-      {/* Block II — Challenges */}
+      {/* Block II — Challenges / Aspirations */}
       <CollapsibleCard index="II" title="Overall Business Challenge / Aspiration">
         {profile.challenges.length === 0 ? (
-          <Empty text="No challenges captured yet." />
+          <Empty text="No challenges or aspirations captured yet." />
         ) : (
           <div className="space-y-6">
-            {profile.challenges.map((challenge, i) => (
-              <div key={i} className="rounded-2xl border border-border bg-muted/40 p-6">
-                <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
-                  <h4 className="text-sm font-bold uppercase tracking-wide text-muted-foreground">
-                    Theme: {challenge.theme || "Unassigned"}
-                  </h4>
-                  {challenge.tag ? (
-                    <span className="rounded-full bg-primary px-3 py-1 text-[10px] font-bold uppercase text-primary-foreground">
-                      {challenge.tag}
-                    </span>
+            {profile.challenges.map((challenge, i) => {
+              const kind = challenge.mood === "aspiration" ? "Aspiration" : "Challenge";
+              return (
+                <div key={i} className="rounded-2xl border border-border bg-muted/40 p-6">
+                  <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <span
+                        className={cn(
+                          "rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide",
+                          challenge.mood === "aspiration"
+                            ? "bg-good-soft text-good-foreground"
+                            : "bg-warn-soft text-warn-foreground",
+                        )}
+                      >
+                        {kind}
+                      </span>
+                      <h4 className="mt-2 text-sm font-bold uppercase tracking-wide text-muted-foreground">
+                        {challenge.theme || "Unassigned theme"}
+                      </h4>
+                      {challenge.themeExample ? (
+                        <p className="mt-1 text-sm font-medium text-foreground">
+                          {challenge.themeExample}
+                        </p>
+                      ) : null}
+                    </div>
+                    {challenge.tag ? (
+                      <span className="rounded-full bg-primary px-3 py-1 text-[10px] font-bold uppercase text-primary-foreground">
+                        {challenge.tag}
+                      </span>
+                    ) : null}
+                  </div>
+
+                  {challenge.problem ? (
+                    <ExpandableText text={challenge.problem} />
+                  ) : (
+                    <p className="text-sm text-muted-foreground">—</p>
+                  )}
+
+                  {challenge.status ? (
+                    <p className="mt-4 rounded-lg bg-card px-4 py-2 text-sm font-medium text-foreground">
+                      <span className="label-caps mr-2">Status</span>
+                      {challenge.status}
+                    </p>
                   ) : null}
+
+                  {challenge.quotes.map((q, qi) => (
+                    <QuoteBlock key={qi} q={q} />
+                  ))}
+
+                  <Sources sources={challenge.sources} />
                 </div>
-
-                {challenge.problem ? (
-                  <ExpandableText text={challenge.problem} />
-                ) : (
-                  <p className="text-sm text-muted-foreground">—</p>
-                )}
-
-                {challenge.status ? (
-                  <p className="mt-4 rounded-lg bg-card px-4 py-2 text-sm font-medium text-foreground">
-                    <span className="label-caps mr-2">Status</span>
-                    {challenge.status}
-                  </p>
-                ) : null}
-
-                {challenge.quotes.map((q, qi) => (
-                  <QuoteBlock key={qi} q={q} />
-                ))}
-
-                <Sources sources={challenge.sources} />
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </CollapsibleCard>
@@ -435,16 +485,19 @@ export function ProfileView({ profile }: { profile: CompanyProfile }) {
             <table className="w-full text-sm">
               <thead className="bg-muted">
                 <tr>
-                  {["Area", "Category", "Initiative", "What it does", "How it is done"].map((h) => (
-                    <th key={h} className="p-4 text-left font-semibold text-muted-foreground">
-                      {h}
-                    </th>
-                  ))}
+                  {["Year", "Area", "Category", "Initiative", "What it does", "How it is done"].map(
+                    (h) => (
+                      <th key={h} className="p-4 text-left font-semibold text-muted-foreground">
+                        {h}
+                      </th>
+                    ),
+                  )}
                 </tr>
               </thead>
               <tbody>
                 {profile.initiatives.map((row, i) => (
                   <tr key={i} className="border-t border-border align-top">
+                    <td className="whitespace-nowrap p-4 font-medium">{row.year || "—"}</td>
                     <td className="p-4 font-medium">{row.area}</td>
                     <td className="p-4">
                       {row.category ? (
@@ -467,28 +520,43 @@ export function ProfileView({ profile }: { profile: CompanyProfile }) {
         )}
       </CollapsibleCard>
 
-      {/* Block V — Partner contributions */}
-      <CollapsibleCard index="V" title="Partner Contributions">
-        {profile.partnerContributions.length === 0 ? (
-          <Empty text="No partner engagements recorded yet." />
+      {/* Block V — Associated partner */}
+      <CollapsibleCard index="V" title="Associated Partner">
+        {mappedPartners.length === 0 && profile.partnerContributions.length === 0 ? (
+          <Empty text="No partner mapped and no engagements recorded yet." />
         ) : (
-          <div className="relative space-y-6 pl-8">
-            <span className="absolute left-[3px] top-2 h-[calc(100%-16px)] w-0.5 bg-border" />
-            {profile.partnerContributions.map((entry, i) => (
-              <div key={i} className="relative">
-                <span className="absolute -left-[33px] top-1 size-3 rounded-full bg-primary ring-4 ring-background" />
-                <p className="label-caps mb-1">
-                  {entry.date}
-                  {entry.stage ? ` · ${entry.stage}` : ""}
-                </p>
-                <p className="text-sm font-semibold text-foreground">{entry.title}</p>
-                {entry.description ? (
-                  <p className="mt-1 whitespace-pre-line text-sm text-muted-foreground">
-                    {entry.description}
-                  </p>
-                ) : null}
+          <div className="space-y-8">
+            {mappedPartners.length > 0 ? (
+              <div className="grid gap-4 md:grid-cols-2">
+                {mappedPartners.map((p) => (
+                  <PartnerCard key={p.id} partner={p} />
+                ))}
               </div>
-            ))}
+            ) : null}
+
+            {profile.partnerContributions.length > 0 ? (
+              <div>
+                <p className="label-caps mb-4">Engagement timeline</p>
+                <div className="relative space-y-6 pl-8">
+                  <span className="absolute left-[3px] top-2 h-[calc(100%-16px)] w-0.5 bg-border" />
+                  {profile.partnerContributions.map((entry, i) => (
+                    <div key={i} className="relative">
+                      <span className="absolute -left-[33px] top-1 size-3 rounded-full bg-primary ring-4 ring-background" />
+                      <p className="label-caps mb-1">
+                        {entry.date}
+                        {entry.stage ? ` · ${entry.stage}` : ""}
+                      </p>
+                      <p className="text-sm font-semibold text-foreground">{entry.title}</p>
+                      {entry.description ? (
+                        <p className="mt-1 whitespace-pre-line text-sm text-muted-foreground">
+                          {entry.description}
+                        </p>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
           </div>
         )}
       </CollapsibleCard>
@@ -552,7 +620,9 @@ export function ProfileView({ profile }: { profile: CompanyProfile }) {
             </DialogTitle>
           </DialogHeader>
 
-          {popup?.kind === "stakeholders" ? <BulletList items={popup.v.stakeholders} /> : null}
+          {popup?.kind === "stakeholders" ? (
+            <StakeholderList people={popup.v.stakeholders} />
+          ) : null}
 
           {popup?.kind === "engagementModel" ? <ChannelEngagement v={popup.v} /> : null}
 
@@ -565,12 +635,15 @@ export function ProfileView({ profile }: { profile: CompanyProfile }) {
               <div className="space-y-4">
                 {popup.v.contributions.map((c, i) => (
                   <div key={i} className="rounded-xl border border-border bg-muted/40 p-4">
+                    {c.stakeholders ? (
+                      <p className="label-caps mb-1">{c.stakeholders}</p>
+                    ) : null}
                     <p className="font-display text-base font-bold text-foreground">
                       {c.model || "Model (unnamed)"}
                     </p>
-                    <p className="mt-3 label-caps">How it can be configured for the company</p>
+                    <p className="mt-3 label-caps">What happens here?</p>
                     <p className="mt-1 whitespace-pre-line text-sm leading-relaxed text-foreground">
-                      {c.configuration || "Not captured yet."}
+                      {c.whatHappens || "Not captured yet."}
                     </p>
                   </div>
                 ))}
@@ -579,6 +652,78 @@ export function ProfileView({ profile }: { profile: CompanyProfile }) {
           ) : null}
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+/* ---------- partner ---------- */
+
+function PartnerCard({ partner }: { partner: Partner }) {
+  return (
+    <div className="rounded-xl border border-border bg-muted/30 p-4">
+      <div className="flex items-start gap-3">
+        <Avatar src={partner.photo_url} name={partner.name} size="size-14" />
+        <div className="min-w-0">
+          <p className="font-display text-base font-bold text-foreground">{partner.name}</p>
+          {partner.linkedin_url ? (
+            <a
+              href={partner.linkedin_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+            >
+              <Linkedin className="size-3" /> LinkedIn
+            </a>
+          ) : null}
+        </div>
+      </div>
+      {partner.experience.length > 0 ? (
+        <ul className="mt-3 space-y-1.5">
+          {partner.experience.map((e, i) => (
+            <li key={i} className="text-sm text-foreground">
+              <span className="font-semibold">{e.role || "Role"}</span>
+              {e.organisation ? (
+                <span className="text-muted-foreground"> · {e.organisation}</span>
+              ) : null}
+              {e.period ? <span className="text-muted-foreground"> · {e.period}</span> : null}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </div>
+  );
+}
+
+/* ---------- stakeholders ---------- */
+
+function StakeholderList({ people }: { people: Stakeholder[] }) {
+  if (people.length === 0) {
+    return <p className="text-sm text-muted-foreground">No stakeholders captured yet.</p>;
+  }
+  return (
+    <div className="space-y-4">
+      {people.map((k, i) => (
+        <div key={i} className="rounded-xl border border-border bg-muted/40 p-4">
+          <div className="flex items-start gap-3">
+            <Avatar src={k.photoUrl} name={k.name} />
+            <div className="min-w-0">
+              <p className="font-display text-base font-bold text-foreground">
+                {k.name || "Unnamed"}
+              </p>
+              {k.role ? <p className="text-sm text-muted-foreground">{k.role}</p> : null}
+            </div>
+          </div>
+          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            <Field label="Position in hierarchy" value={k.hierarchy} />
+            <Field label="Current" value={k.experienceCurrent} />
+            <Field label="Education — UG" value={k.educationUG} />
+            <Field label="Education — PG" value={k.educationPG} />
+            <div className="sm:col-span-2">
+              <Field label="Previous experience" value={k.experiencePrevious} />
+            </div>
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
@@ -685,10 +830,7 @@ function VerticalColumn({
           />
         ) : null}
         {hasEngagement ? (
-          <ClickIn
-            label="Channel engagement model"
-            onClick={() => onOpen("engagementModel")}
-          />
+          <ClickIn label="Channel engagement model" onClick={() => onOpen("engagementModel")} />
         ) : null}
         {v.contributions.length > 0 ? (
           <ClickIn

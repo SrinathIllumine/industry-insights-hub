@@ -5,12 +5,16 @@
  */
 import {
   emptyProfile,
+  emptyStakeholder,
   emptyVertical,
   type Challenge,
+  type ChallengeMood,
   type ChannelStat,
   type CompanyProfile,
   type Grade,
+  type Initiative,
   type Quote,
+  type Stakeholder,
   type Vertical,
 } from "./research-types";
 
@@ -229,8 +233,17 @@ function parseChallenges(doc: Document): Challenge[] {
       .filter((s) => s.url)
       .filter((s, i, arr) => arr.findIndex((x) => x.url === s.url) === i);
 
+    const themeName = theme.replace(/^theme\s+[a-z0-9]+\s*[—–:-]\s*/i, "").trim();
+    const mood: ChallengeMood =
+      !card.classList.contains("crisis") &&
+      /aspir|growth|expansion|ambition|opportunit|funding|scal(e|ing)/i.test(themeName)
+        ? "aspiration"
+        : "challenge";
+
     return {
-      theme,
+      theme: themeName || theme,
+      themeExample: "",
+      mood,
       problem: problemParts.filter(Boolean).join("\n\n"),
       status,
       quotes,
@@ -266,7 +279,16 @@ function parseVertical(section: Element): Vertical {
 
   const decision = section.querySelector(".decision-box");
   if (decision) {
-    v.stakeholders = Array.from(decision.querySelectorAll("li")).map((li) => block(li.textContent));
+    v.stakeholders = Array.from(decision.querySelectorAll("li"))
+      .map((li): Stakeholder => {
+        const nm = clean(li.querySelector("b, strong")?.textContent);
+        let rest = block(li.textContent);
+        if (nm && rest.startsWith(nm)) {
+          rest = rest.slice(nm.length).replace(/^[\s—–:-]+/, "");
+        }
+        return { ...emptyStakeholder(), name: nm || rest, role: nm ? rest : "" };
+      })
+      .filter((k) => k.name || k.role);
   }
 
   section.querySelectorAll(".card").forEach((card) => {
@@ -311,18 +333,22 @@ function parseInitiatives(doc: Document, profile: CompanyProfile) {
   const rows = Array.from(table.querySelectorAll("tr"));
   rows.shift(); // header
   profile.initiatives = rows
-    .map((r) => {
+    .map((r): Initiative | null => {
       const c = Array.from(r.querySelectorAll("td"));
       if (c.length < 3) return null;
+      // Detect an optional leading "Year" column.
+      const hasYear = /^(?:19|20)\d{2}(?:[–-](?:19|20)?\d{2})?$/.test(clean(c[0]?.textContent));
+      const off = hasYear ? 1 : 0;
       return {
-        area: clean(c[0]?.textContent),
-        category: clean(c[1]?.textContent),
-        initiative: clean(c[2]?.textContent),
-        whatItDoes: block(c[3]?.textContent),
-        howItIsDone: block(c[4]?.textContent),
+        year: hasYear ? clean(c[0]?.textContent) : "",
+        area: clean(c[off]?.textContent),
+        category: clean(c[off + 1]?.textContent),
+        initiative: clean(c[off + 2]?.textContent),
+        whatItDoes: block(c[off + 3]?.textContent),
+        howItIsDone: block(c[off + 4]?.textContent),
       };
     })
-    .filter((x): x is NonNullable<typeof x> => !!x && !!x.initiative);
+    .filter((x): x is Initiative => !!x && !!x.initiative);
 }
 
 function h2ForInitTable(doc: Document): Element | null {

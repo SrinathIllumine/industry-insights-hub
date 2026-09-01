@@ -33,7 +33,9 @@ const PROFILE_SHAPE = `{
   },
   "challenges": [
     {
-      "theme": "one of the allowed themes; if a problem genuinely does not fit any, keep the closest and say so in the problem text",
+      "theme": "one of the allowed theme names; if a problem genuinely does not fit any, keep the closest and say so in the problem text",
+      "themeExample": "the specific example / business context under that theme this problem represents",
+      "mood": "challenge (a problem / threat) or aspiration (a goal / ambition) — read the tone of the content",
       "problem": "a thorough, plain-language explanation (4-8 sentences) that ANY reader can understand: what is actually happening, why it exists, what is at stake, how it is playing out, and the leadership response",
       "status": "one short line — where this stands right now (e.g. 'Actively defending; share recovering from 36% to 46%')",
       "quotes": [
@@ -58,18 +60,20 @@ const PROFILE_SHAPE = `{
       "revenueContributors": [ { "name": "product / service / element", "detail": "share or value or why it matters" } ],
       "mixChartCaption": "1-2 sentences on what a product/volume/revenue mix chart for this vertical shows (leave imageUrl-type fields out; the app attaches the image)",
       "channelModelName": "e.g. Dealer Franchise Model (dominant channel)",
-      "stakeholders": ["one bullet per main decision-making stakeholder — name — role — what they decide"],
+      "stakeholders": [
+        { "name": "", "role": "designation / what they decide", "hierarchy": "where they sit in the org, e.g. 'Reports to Group CEO'", "educationUG": "undergrad degree & institute if stated", "educationPG": "postgrad degree & institute if stated", "experienceCurrent": "current mandate", "experiencePrevious": "prior roles & companies" }
+      ],
       "engagementModel": ["one bullet per step / mechanism of how the channel engagement works"],
       "channelStats": [ { "label": "e.g. Dealers / Dealer sales executives per dealership / Company sales & commercial workforce / Retail outlets", "value": "the number incl. any 'est.'/'confirmed' qualifier, e.g. ~750 est." } ],
       "channelMethodology": "the methodology paragraph explaining how estimated numbers were derived, if present",
       "dealerChannelTypes": ["type of dealer or channel active in this vertical"],
       "contributions": [
-        { "model": "one of the allowed Illumine models, or a new short model name", "configuration": "how this model could be configured for this company" }
+        { "stakeholders": "the stakeholder(s) involved, or the engagement between stakeholders — e.g. 'Sales & service associates'", "model": "one of the allowed Illumine models, or a new short model name", "whatHappens": "what happens in this engagement" }
       ]
     }
   ],
   "initiatives": [
-    { "area": "", "category": "", "initiative": "", "whatItDoes": "", "howItIsDone": "" }
+    { "year": "year the initiative was introduced, if stated", "area": "", "category": "", "initiative": "", "whatItDoes": "", "howItIsDone": "" }
   ],
   "partnerContributions": [
     { "date": "e.g. Mar 2025", "stage": "e.g. Initial conversation", "title": "", "description": "" }
@@ -100,11 +104,10 @@ Rules:
 - Do NOT put image URLs or data URIs anywhere. The app attaches chart / map / engagement-map images itself — you only write their titles and captions.
 - Only include a source if a real URL or named document appears in the input.
 - Preserve depth: revenueInsight, channelMethodology and verticalsNote should carry the full nuance from the input, not a summary.
-- Allowed challenge themes (pick the closest one, never invent new): ${data.themes.join(" | ") || "(none configured)"}
+- Allowed challenge theme names (pick the closest one, never invent new): ${data.themes.join(" | ") || "(none configured)"}
 - Allowed challenge tags: ${data.challengeTags.join(" | ") || "(none configured)"}
-- Allowed financial verdict tags: ${data.financialTags.join(" | ") || "(none configured)"}
 - Allowed Illumine models for vertical contributions (prefer these, but a new short model name is allowed): ${data.illumineModels.join(" | ") || "(none configured)"}
-- "stakeholders", "engagementModel" and "dealerChannelTypes" must be arrays of short readable bullet strings, never a single blob.`;
+- "engagementModel" and "dealerChannelTypes" must be arrays of short readable bullet strings. "stakeholders" is an array of objects, one per decision-maker.`;
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",

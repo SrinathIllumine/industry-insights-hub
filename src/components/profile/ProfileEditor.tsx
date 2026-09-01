@@ -1,5 +1,15 @@
-import { createContext, useContext, useRef, useState } from "react";
-import { FileCode, Image as ImageIcon, Loader2, Plus, Trash2, Upload, X } from "lucide-react";
+import { createContext, useContext, useEffect, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import {
+  FileCode,
+  Image as ImageIcon,
+  Loader2,
+  Pencil,
+  Plus,
+  Trash2,
+  Upload,
+  X,
+} from "lucide-react";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
 
@@ -36,14 +46,20 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { structureResearchDump } from "@/lib/research-ai.functions";
-import { uploadCompanyImage } from "@/lib/research-data";
+import { deletePartner, uploadCompanyImage, upsertPartner } from "@/lib/research-data";
 import type { SettingsMap } from "@/lib/research-data";
 import {
+  emptyStakeholder,
   emptyVertical,
   normalizeProfile,
+  toPartnerRoles,
+  type ChallengeMood,
   type CompanyProfile,
   type Grade,
   type IllumineContribution,
+  type Partner,
+  type PartnerRole,
+  type Stakeholder,
   type Vertical,
 } from "@/lib/research-types";
 
@@ -60,6 +76,7 @@ type Props = {
   tagline: string;
   profile: CompanyProfile;
   settings: SettingsMap;
+  partners: Partner[];
   saving: boolean;
   onChange: (next: { name: string; tagline: string; profile: CompanyProfile }) => void;
   onSave: () => void;
@@ -75,6 +92,7 @@ export function ProfileEditor({
   tagline,
   profile,
   settings,
+  partners,
   saving,
   onChange,
   onSave,
@@ -106,16 +124,18 @@ export function ProfileEditor({
         <TabsList className="flex-wrap">
           <TabsTrigger value="import">Import raw data</TabsTrigger>
           <TabsTrigger value="financials">1. Financials</TabsTrigger>
-          <TabsTrigger value="challenges">2. Challenges</TabsTrigger>
+          <TabsTrigger value="challenges">2. Challenge / Aspiration</TabsTrigger>
           <TabsTrigger value="verticals">3. Verticals</TabsTrigger>
           <TabsTrigger value="initiatives">4. Research</TabsTrigger>
-          <TabsTrigger value="partners">5. Partner</TabsTrigger>
+          <TabsTrigger value="partners">5. Associated partner</TabsTrigger>
         </TabsList>
 
         <TabsContent value="import" className="pt-6">
           <ImportPanel
             companyName={name}
-            settings={settings}
+            themeNames={settings.themes.map((t) => t.name)}
+            challengeTags={settings.challenge_tags}
+            illumineModels={settings.illumine_models}
             onParsed={(parsed, meta) =>
               onChange({
                 name: meta?.name?.trim() || name,
@@ -267,29 +287,6 @@ export function ProfileEditor({
               value={fin.industryCagr}
               onChange={(v) => setProfile({ ...profile, financials: { ...fin, industryCagr: v } })}
             />
-            <div className="space-y-1.5">
-              <Label>Overall verdict</Label>
-              <Select
-                value={fin.verdict || undefined}
-                onValueChange={(v) => setProfile({ ...profile, financials: { ...fin, verdict: v } })}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select a verdict tag" />
-                </SelectTrigger>
-                <SelectContent>
-                  {settings.financial_tags.map((tag) => (
-                    <SelectItem key={tag} value={tag}>
-                      {tag}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <Field
-              label="Verdict note"
-              value={fin.verdictNote}
-              onChange={(v) => setProfile({ ...profile, financials: { ...fin, verdictNote: v } })}
-            />
             <Field
               label="Benchmark note"
               value={fin.benchmarkNote}
@@ -390,52 +387,96 @@ export function ProfileEditor({
                 })
               }
             >
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="space-y-1.5">
-                  <Label>Theme / category</Label>
-                  <Select
-                    value={challenge.theme || undefined}
-                    onValueChange={(v) => {
-                      const challenges = [...profile.challenges];
-                      challenges[i] = { ...challenge, theme: v };
-                      setProfile({ ...profile, challenges });
-                    }}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select a theme" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {settings.themes.map((theme) => (
-                        <SelectItem key={theme} value={theme}>
-                          {theme}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-1.5">
-                  <Label>Tag</Label>
-                  <Select
-                    value={challenge.tag || undefined}
-                    onValueChange={(v) => {
-                      const challenges = [...profile.challenges];
-                      challenges[i] = { ...challenge, tag: v };
-                      setProfile({ ...profile, challenges });
-                    }}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select a tag" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {settings.challenge_tags.map((tag) => (
-                        <SelectItem key={tag} value={tag}>
-                          {tag}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
+              {(() => {
+                const patch = (p: Partial<(typeof profile.challenges)[number]>) => {
+                  const challenges = [...profile.challenges];
+                  challenges[i] = { ...challenge, ...p };
+                  setProfile({ ...profile, challenges });
+                };
+                const chosen = settings.themes.find((t) => t.name === challenge.theme);
+                return (
+                  <>
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <div className="space-y-1.5">
+                        <Label>Theme</Label>
+                        <Select
+                          value={challenge.theme || undefined}
+                          onValueChange={(v) => {
+                            const t = settings.themes.find((x) => x.name === v);
+                            patch({ theme: v, mood: t ? t.mood : challenge.mood, themeExample: "" });
+                          }}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select a theme" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {settings.themes.map((theme) => (
+                              <SelectItem key={theme.name} value={theme.name}>
+                                {theme.mood === "aspiration" ? "🎯 " : "⚠️ "}
+                                {theme.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label>Reads as</Label>
+                        <Select
+                          value={challenge.mood || undefined}
+                          onValueChange={(v) => patch({ mood: v as ChallengeMood })}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Challenge or aspiration" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="challenge">Challenge</SelectItem>
+                            <SelectItem value="aspiration">Aspiration</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label>Specific example / business context under this theme</Label>
+                      <Input
+                        value={challenge.themeExample}
+                        onChange={(e) => patch({ themeExample: e.target.value })}
+                      />
+                      {chosen && chosen.examples.length > 0 ? (
+                        <div className="flex flex-wrap gap-1.5 pt-1">
+                          {chosen.examples.map((ex) => (
+                            <button
+                              key={ex}
+                              type="button"
+                              onClick={() => patch({ themeExample: ex })}
+                              className="rounded-full border border-border bg-muted px-2.5 py-0.5 text-xs text-muted-foreground hover:border-primary hover:text-foreground"
+                            >
+                              {ex}
+                            </button>
+                          ))}
+                        </div>
+                      ) : null}
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label>Tag</Label>
+                      <Select
+                        value={challenge.tag || undefined}
+                        onValueChange={(v) => patch({ tag: v })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select a tag" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {settings.challenge_tags.map((tag) => (
+                            <SelectItem key={tag} value={tag}>
+                              {tag}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </>
+                );
+              })()}
               <div className="space-y-1.5">
                 <Label>Detailed problem explanation</Label>
                 <p className="text-xs text-muted-foreground">
@@ -487,7 +528,16 @@ export function ProfileEditor({
                 ...profile,
                 challenges: [
                   ...profile.challenges,
-                  { theme: "", problem: "", status: "", quotes: [], tag: "", sources: [] },
+                  {
+                    theme: "",
+                    themeExample: "",
+                    mood: "challenge" as ChallengeMood,
+                    problem: "",
+                    status: "",
+                    quotes: [],
+                    tag: "",
+                    sources: [],
+                  },
                 ],
               })
             }
@@ -606,20 +656,16 @@ export function ProfileEditor({
                     value={v.channelModelName}
                     onChange={(x) => update({ channelModelName: x })}
                   />
-                  <div className="grid gap-6 md:grid-cols-2">
-                    <BulletsField
-                      label="Main decision-making stakeholders"
-                      help="One per bullet — name — role — what they decide."
-                      items={v.stakeholders}
-                      onChange={(x) => update({ stakeholders: x })}
-                    />
-                    <BulletsField
-                      label="How the channel engagement works (steps)"
-                      help="One step / mechanism per bullet."
-                      items={v.engagementModel}
-                      onChange={(x) => update({ engagementModel: x })}
-                    />
-                  </div>
+                  <StakeholdersField
+                    people={v.stakeholders}
+                    onChange={(x) => update({ stakeholders: x })}
+                  />
+                  <BulletsField
+                    label="How the channel engagement works (steps)"
+                    help="One step / mechanism per bullet."
+                    items={v.engagementModel}
+                    onChange={(x) => update({ engagementModel: x })}
+                  />
                   <ImageField
                     label="Stakeholder engagement map (image)"
                     value={v.engagementMapUrl}
@@ -685,7 +731,12 @@ export function ProfileEditor({
                   })
                 }
               >
-                <div className="grid gap-4 md:grid-cols-3">
+                <div className="grid gap-4 md:grid-cols-4">
+                  <Field
+                    label="Year introduced"
+                    value={row.year}
+                    onChange={(v) => update({ year: v })}
+                  />
                   <div className="space-y-1.5">
                     <Label>Area</Label>
                     <Select value={row.area || undefined} onValueChange={(v) => update({ area: v })}>
@@ -730,7 +781,14 @@ export function ProfileEditor({
                 ...profile,
                 initiatives: [
                   ...profile.initiatives,
-                  { area: "", category: "", initiative: "", whatItDoes: "", howItIsDone: "" },
+                  {
+                    year: "",
+                    area: "",
+                    category: "",
+                    initiative: "",
+                    whatItDoes: "",
+                    howItIsDone: "",
+                  },
                 ],
               })
             }
@@ -739,7 +797,20 @@ export function ProfileEditor({
           </Button>
         </TabsContent>
 
-        <TabsContent value="partners" className="space-y-4 pt-6">
+        <TabsContent value="partners" className="space-y-6 pt-6">
+          <AssociatedPartnersField
+            partners={partners}
+            selectedIds={profile.associatedPartnerIds}
+            onChange={(ids) => setProfile({ ...profile, associatedPartnerIds: ids })}
+          />
+
+          <div className="space-y-4 rounded-xl border border-border bg-muted/30 p-4">
+            <div>
+              <Label>Engagement timeline</Label>
+              <p className="text-xs text-muted-foreground">
+                Everything the partner contributed, from initial conversations to final delivery.
+              </p>
+            </div>
           {profile.partnerContributions.map((row, i) => {
             const update = (patch: Partial<typeof row>) => {
               const partnerContributions = [...profile.partnerContributions];
@@ -797,6 +868,7 @@ export function ProfileEditor({
           >
             <Plus className="size-4" /> Add engagement
           </Button>
+          </div>
         </TabsContent>
       </Tabs>
 
@@ -816,12 +888,16 @@ export function ProfileEditor({
 
 function ImportPanel({
   companyName,
-  settings,
+  themeNames,
+  challengeTags,
+  illumineModels,
   onParsed,
   onImagesFound,
 }: {
   companyName: string;
-  settings: SettingsMap;
+  themeNames: string[];
+  challengeTags: string[];
+  illumineModels: string[];
   onParsed: (profile: CompanyProfile, meta?: { name?: string; tagline?: string }) => void;
   onImagesFound?: (srcs: string[]) => void;
 }) {
@@ -969,10 +1045,10 @@ function ImportPanel({
         data: {
           raw: payload,
           companyName,
-          themes: settings.themes,
-          challengeTags: settings.challenge_tags,
-          financialTags: settings.financial_tags,
-          illumineModels: settings.illumine_models,
+          themes: themeNames,
+          challengeTags,
+          financialTags: [],
+          illumineModels,
         },
       });
       window.clearInterval(tick);
@@ -1498,116 +1574,350 @@ function ContributionsField({
   items: IllumineContribution[];
   onChange: (next: IllumineContribution[]) => void;
 }) {
-  const [custom, setCustom] = useState("");
-  const selected = new Set(items.map((c) => c.model));
-
-  const toggle = (model: string) => {
-    if (selected.has(model)) {
-      onChange(items.filter((c) => c.model !== model));
-    } else {
-      onChange([...items, { model, configuration: "" }]);
-    }
+  const patch = (i: number, p: Partial<IllumineContribution>) => {
+    const next = [...items];
+    const cur = next[i];
+    if (!cur) return;
+    next[i] = { ...cur, ...p };
+    onChange(next);
   };
-
-  const addCustom = () => {
-    const name = custom.trim();
-    if (!name) return;
-    if (selected.has(name)) {
-      toast.error("That model is already added");
-      return;
-    }
-    onChange([...items, { model: name, configuration: "" }]);
-    setCustom("");
-  };
-
-  const setConfig = (model: string, configuration: string) => {
-    onChange(items.map((c) => (c.model === model ? { ...c, configuration } : c)));
-  };
-
-  const extraSelected = items.filter((c) => c.model && !models.includes(c.model));
 
   return (
     <div className="space-y-4 rounded-xl border border-border bg-muted/30 p-4">
       <div>
         <Label>Illumine's potential contributions</Label>
         <p className="text-xs text-muted-foreground">
-          Select the models / solutions that could serve this vertical. New models can also be
-          added — and maintained centrally under Settings.
+          One row per engagement — the stakeholders involved, the model / system, and what happens.
+          Models can be maintained centrally under Settings.
         </p>
       </div>
 
-      <div className="grid gap-2 sm:grid-cols-2">
-        {models.map((model) => (
-          <label
-            key={model}
-            className="flex cursor-pointer items-start gap-2 rounded-lg border border-border bg-card p-3 text-sm"
-          >
-            <Checkbox
-              className="mt-0.5"
-              checked={selected.has(model)}
-              onCheckedChange={() => toggle(model)}
-            />
-            <span>{model}</span>
-          </label>
-        ))}
-      </div>
+      {items.map((c, i) => (
+        <div key={i} className="space-y-3 rounded-lg border border-border bg-card p-4">
+          <div className="flex justify-end">
+            <Button
+              size="icon"
+              variant="ghost"
+              onClick={() => onChange(items.filter((_, x) => x !== i))}
+            >
+              <Trash2 className="size-4 text-destructive" />
+            </Button>
+          </div>
+          <Field
+            label="Stakeholder(s) involved / engagement between stakeholders"
+            value={c.stakeholders}
+            onChange={(v) => patch(i, { stakeholders: v })}
+          />
+          <div className="space-y-1.5">
+            <Label>Model / system</Label>
+            <Input value={c.model} onChange={(e) => patch(i, { model: e.target.value })} />
+            {models.length > 0 ? (
+              <div className="flex flex-wrap gap-1.5 pt-1">
+                {models.map((m) => (
+                  <button
+                    key={m}
+                    type="button"
+                    onClick={() => patch(i, { model: m })}
+                    className={cn(
+                      "rounded-full border px-2.5 py-0.5 text-xs",
+                      c.model === m
+                        ? "border-primary bg-primary text-primary-foreground"
+                        : "border-border bg-muted text-muted-foreground hover:border-primary hover:text-foreground",
+                    )}
+                  >
+                    {m}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </div>
+          <TextField
+            label="What happens here?"
+            value={c.whatHappens}
+            onChange={(v) => patch(i, { whatHappens: v })}
+          />
+        </div>
+      ))}
 
-      <div className="flex gap-2">
-        <Input
-          placeholder="Add a new model / solution"
-          value={custom}
-          onChange={(e) => setCustom(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              e.preventDefault();
-              addCustom();
-            }
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={() => onChange([...items, { stakeholders: "", model: "", whatHappens: "" }])}
+      >
+        <Plus className="size-4" /> Add contribution
+      </Button>
+    </div>
+  );
+}
+
+function StakeholdersField({
+  people,
+  onChange,
+}: {
+  people: Stakeholder[];
+  onChange: (next: Stakeholder[]) => void;
+}) {
+  const patch = (i: number, p: Partial<Stakeholder>) => {
+    const next = [...people];
+    const cur = next[i];
+    if (!cur) return;
+    next[i] = { ...cur, ...p };
+    onChange(next);
+  };
+
+  return (
+    <div className="space-y-4">
+      <Label>Decision-making stakeholders</Label>
+      {people.map((k, i) => (
+        <div key={i} className="space-y-3 rounded-lg border border-border bg-card p-4">
+          <div className="flex justify-end">
+            <Button
+              size="icon"
+              variant="ghost"
+              onClick={() => onChange(people.filter((_, x) => x !== i))}
+            >
+              <Trash2 className="size-4 text-destructive" />
+            </Button>
+          </div>
+          <div className="grid gap-4 md:grid-cols-2">
+            <Field label="Name" value={k.name} onChange={(v) => patch(i, { name: v })} />
+            <Field
+              label="Role / designation"
+              value={k.role}
+              onChange={(v) => patch(i, { role: v })}
+            />
+          </div>
+          <ImageField
+            label="Photo"
+            value={k.photoUrl}
+            onChange={(v) => patch(i, { photoUrl: v })}
+          />
+          <Field
+            label="Position in the org hierarchy"
+            value={k.hierarchy}
+            onChange={(v) => patch(i, { hierarchy: v })}
+          />
+          <div className="grid gap-4 md:grid-cols-2">
+            <Field
+              label="Education — UG"
+              value={k.educationUG}
+              onChange={(v) => patch(i, { educationUG: v })}
+            />
+            <Field
+              label="Education — PG"
+              value={k.educationPG}
+              onChange={(v) => patch(i, { educationPG: v })}
+            />
+          </div>
+          <TextField
+            label="Current role / mandate"
+            value={k.experienceCurrent}
+            onChange={(v) => patch(i, { experienceCurrent: v })}
+          />
+          <TextField
+            label="Previous roles & companies"
+            value={k.experiencePrevious}
+            onChange={(v) => patch(i, { experiencePrevious: v })}
+          />
+        </div>
+      ))}
+      <Button variant="outline" size="sm" onClick={() => onChange([...people, emptyStakeholder()])}>
+        <Plus className="size-4" /> Add stakeholder
+      </Button>
+    </div>
+  );
+}
+
+function AssociatedPartnersField({
+  partners,
+  selectedIds,
+  onChange,
+}: {
+  partners: Partner[];
+  selectedIds: string[];
+  onChange: (ids: string[]) => void;
+}) {
+  const queryClient = useQueryClient();
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editing, setEditing] = useState<Partner | null>(null);
+  const selected = new Set(selectedIds);
+
+  const toggle = (id: string) =>
+    onChange(selected.has(id) ? selectedIds.filter((x) => x !== id) : [...selectedIds, id]);
+
+  return (
+    <div className="space-y-4 rounded-xl border border-border bg-muted/30 p-4">
+      <div className="flex items-start justify-between gap-2">
+        <div>
+          <Label>Associated partner profile(s)</Label>
+          <p className="text-xs text-muted-foreground">
+            Map an existing partner profile to this company, or create a new one — profiles are
+            reusable across companies.
+          </p>
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => {
+            setEditing(null);
+            setDialogOpen(true);
           }}
-        />
-        <Button variant="outline" onClick={addCustom}>
-          <Plus className="size-4" /> Add
+        >
+          <Plus className="size-4" /> New profile
         </Button>
       </div>
 
-      {extraSelected.length > 0 ? (
-        <div className="flex flex-wrap gap-2">
-          {extraSelected.map((c) => (
-            <span
-              key={c.model}
-              className="inline-flex items-center gap-1 rounded-full bg-primary px-3 py-1 text-xs font-semibold text-primary-foreground"
+      {partners.length === 0 ? (
+        <p className="text-sm text-muted-foreground">No partner profiles yet — create one.</p>
+      ) : (
+        <div className="grid gap-2 sm:grid-cols-2">
+          {partners.map((p) => (
+            <div
+              key={p.id}
+              className="flex items-center gap-2 rounded-lg border border-border bg-card p-3 text-sm"
             >
-              {c.model}
-              <button
-                type="button"
-                onClick={() => onChange(items.filter((x) => x.model !== c.model))}
-                aria-label={`Remove ${c.model}`}
+              <Checkbox checked={selected.has(p.id)} onCheckedChange={() => toggle(p.id)} />
+              <span className="flex-1 truncate font-medium">{p.name}</span>
+              <Button
+                size="icon"
+                variant="ghost"
+                onClick={() => {
+                  setEditing(p);
+                  setDialogOpen(true);
+                }}
+                aria-label={`Edit ${p.name}`}
               >
-                <X className="size-3" />
-              </button>
-            </span>
-          ))}
-        </div>
-      ) : null}
-
-      {items.length > 0 ? (
-        <div className="space-y-4 border-t border-border pt-4">
-          {items.map((c, ci) => (
-            <div key={c.model || ci} className="space-y-1.5">
-              <Label className="text-sm font-semibold">
-                {c.model || "Model (unnamed)"} — How do you think it can be configured for the
-                company?
-              </Label>
-              <Textarea
-                rows={3}
-                value={c.configuration}
-                onChange={(e) => setConfig(c.model, e.target.value)}
-                placeholder="Describe how this model would be adapted / configured for this company and vertical…"
-              />
+                <Pencil className="size-4" />
+              </Button>
             </div>
           ))}
         </div>
-      ) : null}
+      )}
+
+      <PartnerProfileDialog
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+        partner={editing}
+        onSaved={async (id) => {
+          await queryClient.invalidateQueries({ queryKey: ["partners"] });
+          if (id && !selected.has(id)) onChange([...selectedIds, id]);
+        }}
+      />
     </div>
+  );
+}
+
+function PartnerProfileDialog({
+  open,
+  onOpenChange,
+  partner,
+  onSaved,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  partner: Partner | null;
+  onSaved: (id: string) => void | Promise<void>;
+}) {
+  const [name, setName] = useState("");
+  const [photo, setPhoto] = useState("");
+  const [linkedin, setLinkedin] = useState("");
+  const [roles, setRoles] = useState<PartnerRole[]>([]);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    setName(partner?.name ?? "");
+    setPhoto(partner?.photo_url ?? "");
+    setLinkedin(partner?.linkedin_url ?? "");
+    setRoles(toPartnerRoles(partner?.experience));
+  }, [open, partner]);
+
+  const save = async () => {
+    if (!name.trim()) {
+      toast.error("Partner name is required");
+      return;
+    }
+    setBusy(true);
+    try {
+      const id = await upsertPartner({
+        ...(partner ? { id: partner.id } : {}),
+        name: name.trim(),
+        photo_url: photo.trim(),
+        linkedin_url: linkedin.trim(),
+        experience: roles.filter((r) => r.organisation || r.role || r.period),
+      });
+      toast.success("Partner profile saved");
+      onOpenChange(false);
+      await onSaved(id);
+    } catch (error) {
+      toast.error((error as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-h-[85vh] max-w-lg overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>{partner ? "Edit partner profile" : "New partner profile"}</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4">
+          <Field label="Name" value={name} onChange={setName} />
+          <ImageField label="Photo" value={photo} onChange={setPhoto} />
+          <Field label="LinkedIn profile URL" value={linkedin} onChange={setLinkedin} />
+          <PairListField
+            label="Experience — companies & roles"
+            aLabel="Organisation"
+            bLabel="Role & period"
+            items={roles.map((r) => ({ a: r.organisation, b: [r.role, r.period].filter(Boolean).join(" · ") }))}
+            onChange={(rows) =>
+              setRoles(
+                rows.map((r) => {
+                  const [role, period] = r.b.split(/\s*·\s*/);
+                  return { organisation: r.a, role: role ?? "", period: period ?? "" };
+                }),
+              )
+            }
+          />
+        </div>
+        <div className="mt-2 flex items-center justify-between gap-2">
+          {partner ? (
+            <Button
+              variant="ghost"
+              className="text-destructive hover:text-destructive"
+              disabled={busy}
+              onClick={async () => {
+                setBusy(true);
+                try {
+                  await deletePartner(partner.id);
+                  toast.success("Partner profile deleted");
+                  onOpenChange(false);
+                  await onSaved("");
+                } catch (error) {
+                  toast.error((error as Error).message);
+                } finally {
+                  setBusy(false);
+                }
+              }}
+            >
+              <Trash2 className="size-4" /> Delete
+            </Button>
+          ) : (
+            <span />
+          )}
+          <div className="flex gap-2">
+            <Button variant="ghost" onClick={() => onOpenChange(false)}>
+              Cancel
+            </Button>
+            <Button onClick={save} disabled={busy}>
+              {busy ? <Loader2 className="size-4 animate-spin" /> : null}
+              Save profile
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 

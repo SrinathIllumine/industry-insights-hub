@@ -11,6 +11,7 @@ import { ProfileEditor } from "@/components/profile/ProfileEditor";
 import {
   companyQuery,
   industryQuery,
+  partnersQuery,
   saveCompany,
   settingsQuery,
 } from "@/lib/research-data";
@@ -35,6 +36,7 @@ export const Route = createFileRoute("/company/$companyId")({
   loader: ({ context, params }) => {
     void context.queryClient.ensureQueryData(companyQuery(params.companyId));
     void context.queryClient.ensureQueryData(settingsQuery);
+    void context.queryClient.ensureQueryData(partnersQuery);
   },
   component: CompanyPage,
   errorComponent: ({ error }) => (
@@ -55,6 +57,7 @@ function CompanyPage() {
   const { companyId } = Route.useParams();
   const { data: company } = useSuspenseQuery(companyQuery(companyId));
   const { data: settings } = useSuspenseQuery(settingsQuery);
+  const { data: partners } = useSuspenseQuery(partnersQuery);
   const { data: industry } = useSuspenseQuery(
     industryQuery(company?.industry_id ?? ""),
   );
@@ -169,13 +172,14 @@ function CompanyPage() {
           tagline={draft.tagline}
           profile={draft.profile}
           settings={settings}
+          partners={partners}
           saving={saving}
           onChange={setDraft}
           onSave={save}
           onCancel={cancelEditing}
         />
       ) : (
-        <ProfileView profile={company.profile ?? emptyProfile()} />
+        <ProfileView profile={company.profile ?? emptyProfile()} partners={partners} />
       )}
     </AppShell>
   );

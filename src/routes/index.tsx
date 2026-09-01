@@ -68,7 +68,7 @@ function IndustriesPage() {
     <AppShell>
       <PageHeading
         title="Industry Research"
-        subtitle="Select an industry to explore its company research profiles."
+        subtitle="Repository of industries & companies which are more suitable for Retail Enablement Model. Select an industry to explore its company research profiles."
         action={
           <Button variant="outline" className="rounded-full" onClick={() => setManageOpen(true)}>
             Edit industries
