@@ -281,12 +281,21 @@ export function ProfileView({ profile }: { profile: CompanyProfile }) {
       : []),
   ];
   const hasTable = fin.metrics.some((m) => m.values.some(Boolean));
+  const soleChart = charts.length === 1 ? charts[0] : undefined;
 
   return (
     <div className="space-y-4">
       {/* Block I — Financials */}
       <CollapsibleCard index="I" title="Financial Performance" defaultOpen>
-        {charts.length > 0 ? (
+        {soleChart ? (
+          <div className="mx-auto max-w-2xl">
+            <ImageFigure
+              src={soleChart.imageUrl}
+              title={soleChart.title}
+              caption={soleChart.caption}
+            />
+          </div>
+        ) : charts.length > 1 ? (
           <div className="grid gap-6 md:grid-cols-2">
             {charts.map((chart, i) => (
               <ImageFigure
@@ -341,7 +350,7 @@ export function ProfileView({ profile }: { profile: CompanyProfile }) {
 
         {fin.narrative ? (
           <div className="mt-8">
-            <Callout label="Sense-making" text={fin.narrative} />
+            <Callout label="Insight" text={fin.narrative} />
           </div>
         ) : null}
       </CollapsibleCard>

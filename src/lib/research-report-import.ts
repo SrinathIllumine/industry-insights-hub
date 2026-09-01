@@ -149,11 +149,45 @@ function parseFinancials(doc: Document, profile: CompanyProfile) {
     }
   }
 
-  const foot = nodes
-    .flatMap((n) => Array.from(n.querySelectorAll(".foot-note")))
-    .map((f) => block(f.textContent))
-    .join("\n");
-  if (foot) fin.verdictNote = foot;
+  // Overall verdict — take it verbatim if the report states one, else derive it
+  // from the company's revenue CAGR versus the industry's.
+  const sectionText = nodes.map((n) => n.textContent || "").join(" ");
+  const stated =
+    /overall verdict[:\s-]*([^.\n<]{3,48})/i.exec(sectionText)?.[1] ||
+    /\b((?:high|strong|moderately?|moderate|low|weak|under)[\s-]*performing)\b/i.exec(
+      sectionText,
+    )?.[1] ||
+    "";
+  const s = stated.toLowerCase();
+  if (/high|strong/.test(s)) fin.verdict = "High performing";
+  else if (/moderate/.test(s)) fin.verdict = "Moderate performing";
+  else if (/low|weak|under/.test(s)) fin.verdict = "Low performing";
+
+  if (!fin.verdict) {
+    const co = parseFloat(fin.revenueCagr.replace(/[^\d.-]/g, ""));
+    const ind = parseFloat(fin.industryCagr.replace(/[^\d.-]/g, ""));
+    if (Number.isFinite(co) && Number.isFinite(ind) && ind > 0) {
+      if (co >= ind * 1.15) {
+        fin.verdict = "High performing";
+        fin.verdictNote = `Revenue CAGR ${fin.revenueCagr} is well ahead of the industry's ${fin.industryCagr}.`;
+      } else if (co >= ind * 0.9) {
+        fin.verdict = "Moderate performing";
+        fin.verdictNote = `Revenue CAGR ${fin.revenueCagr} is broadly in line with the industry's ${fin.industryCagr}.`;
+      } else {
+        fin.verdict = "Low performing";
+        fin.verdictNote = `Revenue CAGR ${fin.revenueCagr} trails the industry's ${fin.industryCagr}.`;
+      }
+    }
+  }
+
+  if (!fin.verdictNote) {
+    const foot = nodes
+      .flatMap((n) => Array.from(n.querySelectorAll(".foot-note")))
+      .map((f) => block(f.textContent))
+      .join("\n")
+      .split("\n")[0];
+    if (foot) fin.verdictNote = foot;
+  }
 }
 
 function parseChallenges(doc: Document): Challenge[] {
