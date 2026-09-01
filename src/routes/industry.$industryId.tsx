@@ -33,6 +33,7 @@ import {
   deleteCompany,
   industryQuery,
 } from "@/lib/research-data";
+import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/industry/$industryId")({
   head: () => ({
@@ -67,6 +68,15 @@ export const Route = createFileRoute("/industry/$industryId")({
     </AppShell>
   ),
 });
+
+/** Green / amber / red pill classes for a financial verdict, by keyword. */
+function verdictClass(verdict: string): string {
+  const v = verdict.toLowerCase();
+  if (/high|strong/.test(v)) return "bg-good-soft text-good-foreground";
+  if (/moderate|medium|mid/.test(v)) return "bg-warn-soft text-warn-foreground";
+  if (/low|weak|under|poor/.test(v)) return "bg-bad-soft text-bad-foreground";
+  return "bg-muted text-muted-foreground";
+}
 
 function IndustryPage() {
   const { industryId } = Route.useParams();
@@ -110,7 +120,14 @@ function IndustryPage() {
               </p>
             </div>
             <div className="mt-6 flex items-center justify-between">
-              <span className="rounded-full bg-muted px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+              <span
+                className={cn(
+                  "rounded-full px-3 py-1 text-[10px] font-bold uppercase tracking-widest",
+                  company.profile.financials.verdict
+                    ? verdictClass(company.profile.financials.verdict)
+                    : "bg-muted text-muted-foreground",
+                )}
+              >
                 {company.profile.financials.verdict || "Verdict pending"}
               </span>
               <ArrowRight className="size-4 text-muted-foreground transition-transform group-hover:translate-x-1 group-hover:text-foreground" />
