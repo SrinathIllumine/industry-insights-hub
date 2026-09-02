@@ -49,10 +49,13 @@ import { structureResearchDump } from "@/lib/research-ai.functions";
 import { deletePartner, uploadCompanyImage, upsertPartner } from "@/lib/research-data";
 import type { SettingsMap } from "@/lib/research-data";
 import {
+  STAKEHOLDER_CATEGORIES,
+  emptyChallengeContext,
   emptyStakeholder,
   emptyVertical,
   normalizeProfile,
   toPartnerRoles,
+  type ChallengeContext,
   type ChallengeMood,
   type CompanyProfile,
   type Grade,
@@ -393,17 +396,16 @@ export function ProfileEditor({
                   challenges[i] = { ...challenge, ...p };
                   setProfile({ ...profile, challenges });
                 };
-                const chosen = settings.themes.find((t) => t.name === challenge.theme);
                 return (
                   <>
-                    <div className="grid gap-4 md:grid-cols-2">
+                    <div className="grid gap-4 md:grid-cols-3">
                       <div className="space-y-1.5">
                         <Label>Theme</Label>
                         <Select
                           value={challenge.theme || undefined}
                           onValueChange={(v) => {
                             const t = settings.themes.find((x) => x.name === v);
-                            patch({ theme: v, mood: t ? t.mood : challenge.mood, themeExample: "" });
+                            patch({ theme: v, mood: t ? t.mood : challenge.mood });
                           }}
                         >
                           <SelectTrigger>
@@ -434,91 +436,41 @@ export function ProfileEditor({
                           </SelectContent>
                         </Select>
                       </div>
+                      <div className="space-y-1.5">
+                        <Label>Tag</Label>
+                        <Select
+                          value={challenge.tag || undefined}
+                          onValueChange={(v) => patch({ tag: v })}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select a tag" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {settings.challenge_tags.map((tag) => (
+                              <SelectItem key={tag} value={tag}>
+                                {tag}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
                     </div>
-                    <div className="space-y-1.5">
-                      <Label>Specific example / business context under this theme</Label>
-                      <Input
-                        value={challenge.themeExample}
-                        onChange={(e) => patch({ themeExample: e.target.value })}
-                      />
-                      {chosen && chosen.examples.length > 0 ? (
-                        <div className="flex flex-wrap gap-1.5 pt-1">
-                          {chosen.examples.map((ex) => (
-                            <button
-                              key={ex}
-                              type="button"
-                              onClick={() => patch({ themeExample: ex })}
-                              className="rounded-full border border-border bg-muted px-2.5 py-0.5 text-xs text-muted-foreground hover:border-primary hover:text-foreground"
-                            >
-                              {ex}
-                            </button>
-                          ))}
-                        </div>
-                      ) : null}
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label>Tag</Label>
-                      <Select
-                        value={challenge.tag || undefined}
-                        onValueChange={(v) => patch({ tag: v })}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select a tag" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {settings.challenge_tags.map((tag) => (
-                            <SelectItem key={tag} value={tag}>
-                              {tag}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
+                    <TextField
+                      label="Overall summary (the recurring pattern across the contexts below)"
+                      value={challenge.summary}
+                      onChange={(v) => patch({ summary: v })}
+                    />
+                    <ContextsField
+                      items={challenge.contexts}
+                      onChange={(contexts) => patch({ contexts })}
+                    />
+                    <SourcesField
+                      items={challenge.sources}
+                      onChange={(sources) => patch({ sources })}
+                    />
                   </>
                 );
               })()}
-              <div className="space-y-1.5">
-                <Label>Detailed problem explanation</Label>
-                <p className="text-xs text-muted-foreground">
-                  Write it so any reader understands: what the problem is, why it exists, what is
-                  at stake, how it is playing out. A few lines are shown by default with a “see
-                  more”.
-                </p>
-                <Textarea
-                  rows={7}
-                  value={challenge.problem}
-                  onChange={(e) => {
-                    const challenges = [...profile.challenges];
-                    challenges[i] = { ...challenge, problem: e.target.value };
-                    setProfile({ ...profile, challenges });
-                  }}
-                />
-              </div>
-              <Field
-                label="Status right now (one line)"
-                value={challenge.status}
-                onChange={(v) => {
-                  const challenges = [...profile.challenges];
-                  challenges[i] = { ...challenge, status: v };
-                  setProfile({ ...profile, challenges });
-                }}
-              />
-              <QuotesField
-                items={challenge.quotes}
-                onChange={(quotes) => {
-                  const challenges = [...profile.challenges];
-                  challenges[i] = { ...challenge, quotes };
-                  setProfile({ ...profile, challenges });
-                }}
-              />
-              <SourcesField
-                items={challenge.sources}
-                onChange={(sources) => {
-                  const challenges = [...profile.challenges];
-                  challenges[i] = { ...challenge, sources };
-                  setProfile({ ...profile, challenges });
-                }}
-              />
             </RowCard>
           ))}
           <Button
@@ -530,11 +482,9 @@ export function ProfileEditor({
                   ...profile.challenges,
                   {
                     theme: "",
-                    themeExample: "",
                     mood: "challenge" as ChallengeMood,
-                    problem: "",
-                    status: "",
-                    quotes: [],
+                    summary: "",
+                    contexts: [emptyChallengeContext()],
                     tag: "",
                     sources: [],
                   },
@@ -542,7 +492,7 @@ export function ProfileEditor({
               })
             }
           >
-            <Plus className="size-4" /> Add challenge
+            <Plus className="size-4" /> Add challenge / aspiration
           </Button>
         </TabsContent>
 
@@ -990,7 +940,7 @@ function ImportPanel({
 
     // 1) Free path: a "Company Research Report" HTML template parses locally.
     if (reportHtml) {
-      const report = parseResearchReport(reportHtml);
+      const report = parseResearchReport(reportHtml, { illumineModels });
       if (report) {
         setBusy(true);
         setPhase("Reading the research report…");
@@ -1404,6 +1354,80 @@ function QuotesField({
   );
 }
 
+function ContextsField({
+  items,
+  onChange,
+}: {
+  items: ChallengeContext[];
+  onChange: (next: ChallengeContext[]) => void;
+}) {
+  const patch = (i: number, p: Partial<ChallengeContext>) => {
+    const next = [...items];
+    const cur = next[i];
+    if (!cur) return;
+    next[i] = { ...cur, ...p };
+    onChange(next);
+  };
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <Label>Problems / business contexts</Label>
+        <p className="text-xs text-muted-foreground">
+          Add one per business or vertical where this challenge / aspiration shows up.
+        </p>
+      </div>
+      {items.map((ctx, i) => (
+        <div key={i} className="space-y-3 rounded-lg border border-border bg-card p-4">
+          <div className="flex justify-end">
+            <Button
+              size="icon"
+              variant="ghost"
+              onClick={() => onChange(items.filter((_, x) => x !== i))}
+            >
+              <Trash2 className="size-4 text-destructive" />
+            </Button>
+          </div>
+          <div className="grid gap-4 md:grid-cols-2">
+            <Field
+              label="Business / vertical this is about"
+              value={ctx.label}
+              onChange={(v) => patch(i, { label: v })}
+            />
+            <Field
+              label="Specific framing / title"
+              value={ctx.title}
+              onChange={(v) => patch(i, { title: v })}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Detailed explanation</Label>
+            <Textarea
+              rows={6}
+              value={ctx.problem}
+              onChange={(e) => patch(i, { problem: e.target.value })}
+            />
+          </div>
+          <Field
+            label="Status right now (one line)"
+            value={ctx.status}
+            onChange={(v) => patch(i, { status: v })}
+          />
+          <QuotesField items={ctx.quotes} onChange={(quotes) => patch(i, { quotes })} />
+          <SourcesField items={ctx.sources} onChange={(sources) => patch(i, { sources })} />
+        </div>
+      ))}
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={() => onChange([...items, emptyChallengeContext()])}
+      >
+        <Plus className="size-4" /> Add problem / context
+      </Button>
+    </div>
+  );
+}
+
 function SourcesField({
   items,
   onChange,
@@ -1687,6 +1711,15 @@ function StakeholdersField({
               onChange={(v) => patch(i, { role: v })}
             />
           </div>
+          <div className="space-y-1.5">
+            <Label>Category</Label>
+            <Input
+              list="stakeholder-cats"
+              value={k.category}
+              onChange={(e) => patch(i, { category: e.target.value })}
+              placeholder="e.g. Management stakeholder"
+            />
+          </div>
           <ImageField
             label="Photo"
             value={k.photoUrl}
@@ -1719,8 +1752,18 @@ function StakeholdersField({
             value={k.experiencePrevious}
             onChange={(v) => patch(i, { experiencePrevious: v })}
           />
+          <TextField
+            label="Caveat / confirmation note"
+            value={k.note}
+            onChange={(v) => patch(i, { note: v })}
+          />
         </div>
       ))}
+      <datalist id="stakeholder-cats">
+        {STAKEHOLDER_CATEGORIES.map((c) => (
+          <option key={c} value={c} />
+        ))}
+      </datalist>
       <Button variant="outline" size="sm" onClick={() => onChange([...people, emptyStakeholder()])}>
         <Plus className="size-4" /> Add stakeholder
       </Button>

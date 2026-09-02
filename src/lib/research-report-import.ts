@@ -8,12 +8,14 @@ import {
   emptyStakeholder,
   emptyVertical,
   type Challenge,
+  type ChallengeContext,
   type ChallengeMood,
   type ChannelStat,
   type CompanyProfile,
   type Grade,
   type Initiative,
   type Quote,
+  type SourceLink,
   type Stakeholder,
   type Vertical,
 } from "./research-types";
@@ -194,61 +196,82 @@ function parseFinancials(doc: Document, profile: CompanyProfile) {
   }
 }
 
+function parseQuote(bq: Element): Quote {
+  const cite = bq.querySelector("cite");
+  const link = bq.querySelector("a.inline-src, a[href]");
+  const linkText = clean(link?.textContent).replace(/^→\s*/, "");
+  const by = clean(cite?.textContent)
+    .replace(/^—\s*/, "")
+    .replace(linkText, "")
+    .replace(/[·|,\s]+$/, "")
+    .trim();
+  let text = block(bq.textContent);
+  if (cite) text = text.replace(block(cite.textContent), "").trim();
+  text = text.replace(/^["“”]+|["“”]+$/g, "").trim();
+  return { text, by, sourceLabel: linkText, sourceUrl: (link?.getAttribute("href") || "").trim() };
+}
+
+function paragraphProblem(scope: Element): { problem: string; status: string; sources: SourceLink[] } {
+  const paras = Array.from(scope.querySelectorAll("p"));
+  let status = "";
+  const parts: string[] = [];
+  for (const p of paras) {
+    const bold = clean(p.querySelector("b, strong")?.textContent);
+    const body = textAfterLabel(p);
+    if (/status/i.test(bold)) status = body;
+    else parts.push(bold ? `${bold} ${body}` : body);
+  }
+  const sources = paras
+    .flatMap((p) => inlineSources(p))
+    .filter((s) => s.url)
+    .filter((s, i, arr) => arr.findIndex((x) => x.url === s.url) === i);
+  return { problem: parts.filter(Boolean).join("\n\n"), status, sources };
+}
+
 function parseChallenges(doc: Document): Challenge[] {
   return Array.from(doc.querySelectorAll(".theme-card")).map((card) => {
-    const theme = clean(card.querySelector("h4")?.textContent);
-    const paras = Array.from(card.querySelectorAll(":scope > p"));
+    const h4 = card.querySelector("h4");
+    const tagEl = card.querySelector(".ca-tag");
+    const tagHay = `${clean(tagEl?.textContent)} ${tagEl?.getAttribute("class") || ""}`.toLowerCase();
+    const mood: ChallengeMood =
+      !card.classList.contains("crisis") && /aspiration/.test(tagHay) ? "aspiration" : "challenge";
 
-    let status = "";
-    const problemParts: string[] = [];
-    for (const p of paras) {
-      const label = clean(p.querySelector("b, strong")?.textContent).toLowerCase();
-      const body = textAfterLabel(p);
-      if (/status/.test(label)) status = body;
-      else problemParts.push(label ? `${clean(p.querySelector("b, strong")?.textContent)} ${body}` : body);
+    let theme = clean(h4?.textContent);
+    if (tagEl) theme = theme.replace(clean(tagEl.textContent), "").trim();
+    theme = theme.replace(/^theme\s+[a-z0-9]+\s*[—–:-]\s*/i, "").trim();
+
+    const contextEls = Array.from(card.querySelectorAll(".business-context"));
+
+    const summary = Array.from(card.querySelectorAll(":scope > p"))
+      .map((p) => block(p.textContent))
+      .filter(Boolean)
+      .join("\n\n");
+
+    const toContext = (el: Element): ChallengeContext => {
+      const { problem, status, sources } = paragraphProblem(el);
+      return {
+        label: clean(el.querySelector(".vlabel")?.textContent),
+        title: clean(el.querySelector("h5")?.textContent),
+        problem,
+        status,
+        quotes: Array.from(el.querySelectorAll("blockquote")).map(parseQuote),
+        sources,
+      };
+    };
+
+    let contexts: ChallengeContext[] = contextEls.map(toContext);
+    if (!contexts.length) {
+      const ctx = toContext(card);
+      if (ctx.problem || ctx.quotes.length) contexts = [ctx];
     }
 
-    const quotes: Quote[] = Array.from(card.querySelectorAll("blockquote")).map((bq) => {
-      const cite = bq.querySelector("cite");
-      const link = bq.querySelector("a.inline-src, a[href]");
-      const citeText = clean(cite?.textContent).replace(/^—\s*/, "");
-      const linkText = clean(link?.textContent).replace(/^→\s*/, "");
-      const by = citeText
-        .replace(linkText, "")
-        .replace(/[·|,\s]+$/, "")
-        .trim();
-      let text = block(bq.textContent);
-      if (cite) text = text.replace(block(cite.textContent), "").trim();
-      text = text.replace(/^["“”]+|["“”]+$/g, "").trim();
-      return {
-        text,
-        by,
-        sourceLabel: linkText,
-        sourceUrl: (link?.getAttribute("href") || "").trim(),
-      };
-    });
-
-    const sources = paras
-      .flatMap((p) => inlineSources(p))
-      .filter((s) => s.url)
-      .filter((s, i, arr) => arr.findIndex((x) => x.url === s.url) === i);
-
-    const themeName = theme.replace(/^theme\s+[a-z0-9]+\s*[—–:-]\s*/i, "").trim();
-    const mood: ChallengeMood =
-      !card.classList.contains("crisis") &&
-      /aspir|growth|expansion|ambition|opportunit|funding|scal(e|ing)/i.test(themeName)
-        ? "aspiration"
-        : "challenge";
-
     return {
-      theme: themeName || theme,
-      themeExample: "",
+      theme: theme || clean(h4?.textContent),
       mood,
-      problem: problemParts.filter(Boolean).join("\n\n"),
-      status,
-      quotes,
+      summary: contextEls.length ? summary : "",
+      contexts,
       tag: card.classList.contains("crisis") ? "External / operational shock" : "",
-      sources,
+      sources: [],
     };
   });
 }
@@ -277,18 +300,62 @@ function parseVertical(section: Element): Vertical {
     v.channelModelName = (m?.[1] ?? "").trim();
   }
 
-  const decision = section.querySelector(".decision-box");
-  if (decision) {
-    v.stakeholders = Array.from(decision.querySelectorAll("li"))
-      .map((li): Stakeholder => {
-        const nm = clean(li.querySelector("b, strong")?.textContent);
-        let rest = block(li.textContent);
-        if (nm && rest.startsWith(nm)) {
-          rest = rest.slice(nm.length).replace(/^[\s—–:-]+/, "");
-        }
-        return { ...emptyStakeholder(), name: nm || rest, role: nm ? rest : "" };
-      })
-      .filter((k) => k.name || k.role);
+  // New template: per-vertical stakeholder categories with profile cards.
+  const catStakeholders: Stakeholder[] = [];
+  section.querySelectorAll(".stakeholder-cat").forEach((catEl) => {
+    const category = clean(catEl.querySelector("h6")?.textContent)
+      .replace(/^\([ivxlcdm0-9]+\)\s*/i, "")
+      .trim();
+    catEl.querySelectorAll(".profile-card").forEach((pc) => {
+      const k = emptyStakeholder();
+      k.category = category;
+      k.name = clean(pc.querySelector(".pname")?.textContent);
+      k.role = clean(pc.querySelector(".ptitle")?.textContent);
+      const flag = clean(
+        pc.querySelector(".ptitle .since-flag, .ptitle .estimate-flag")?.textContent,
+      );
+      if (flag && k.role.endsWith(flag)) k.role = k.role.slice(0, -flag.length).trim();
+
+      pc.querySelectorAll(".pdetail").forEach((d) => {
+        const bold = clean(d.querySelector("b")?.textContent)
+          .toLowerCase()
+          .replace(/:$/, "")
+          .trim();
+        const body = block(d.textContent).replace(/^[\s\S]*?:\s*/, "").trim();
+        const raw = block(d.textContent);
+        const isNote =
+          !bold &&
+          ((d.getAttribute("style") || "").toLowerCase().includes("color") ||
+            d.classList.contains("confirmed-flag") ||
+            /^[⚠✔]/.test(raw));
+        if (/^ug\b|undergrad|bachelor/.test(bold)) k.educationUG = body;
+        else if (/^pg\b|postgrad|master/.test(bold)) k.educationPG = body;
+        else if (/education/.test(bold)) {
+          if (!k.educationUG) k.educationUG = body;
+        } else if (/experience|prior/.test(bold)) k.experiencePrevious = body;
+        else if (isNote) k.note = k.note ? `${k.note} ${raw}` : raw;
+      });
+
+      if (k.name || k.role) catStakeholders.push(k);
+    });
+  });
+
+  if (catStakeholders.length) {
+    v.stakeholders = catStakeholders;
+  } else {
+    const decision = section.querySelector(".decision-box");
+    if (decision) {
+      v.stakeholders = Array.from(decision.querySelectorAll("li"))
+        .map((li): Stakeholder => {
+          const nm = clean(li.querySelector("b, strong")?.textContent);
+          let rest = block(li.textContent);
+          if (nm && rest.startsWith(nm)) {
+            rest = rest.slice(nm.length).replace(/^[\s—–:-]+/, "");
+          }
+          return { ...emptyStakeholder(), name: nm || rest, role: nm ? rest : "" };
+        })
+        .filter((k) => k.name || k.role);
+    }
   }
 
   section.querySelectorAll(".card").forEach((card) => {
@@ -356,7 +423,10 @@ function h2ForInitTable(doc: Document): Element | null {
   return h ? (sectionNodes(h).find((n) => n.tagName === "TABLE") ?? null) : null;
 }
 
-export function parseResearchReport(html: string): ReportImportResult | null {
+export function parseResearchReport(
+  html: string,
+  options: { illumineModels?: string[] } = {},
+): ReportImportResult | null {
   if (typeof DOMParser === "undefined" || !looksLikeResearchReport(html)) return null;
 
   const doc = new DOMParser().parseFromString(html, "text/html");
@@ -370,6 +440,16 @@ export function parseResearchReport(html: string): ReportImportResult | null {
     parseInitiatives(doc, profile);
   } catch {
     return null;
+  }
+
+  // Seed 1-2 sample Illumine contributions per vertical for the user to edit.
+  const samples = (options.illumineModels ?? []).slice(0, 2);
+  if (samples.length) {
+    for (const v of profile.verticals) {
+      if (v.contributions.length === 0) {
+        v.contributions = samples.map((m) => ({ stakeholders: "", model: m, whatHappens: "" }));
+      }
+    }
   }
 
   const filled =

@@ -46,21 +46,40 @@ export type Quote = {
 
 export type ChallengeMood = "challenge" | "aspiration" | "";
 
-export type Challenge = {
-  /** The theme name (from the configured themes list). */
-  theme: string;
-  /** The specific example / business context under that theme. */
-  themeExample: string;
-  /** Whether this reads as a challenge or an aspiration. */
-  mood: ChallengeMood;
-  /** A thorough, plain-language explanation of the problem. */
+/** One problem / business context under a challenge. A challenge can have several. */
+export type ChallengeContext = {
+  /** Which business / vertical this context belongs to, e.g. "Passenger Vehicles". */
+  label: string;
+  /** The specific framing of the problem in this context. */
+  title: string;
+  /** A thorough, plain-language explanation. */
   problem: string;
   /** Short "where this stands right now" line. */
   status: string;
-  /** Verbatim stakeholder quotes, each genuinely about this problem. */
   quotes: Quote[];
+  sources: SourceLink[];
+};
+
+export const emptyChallengeContext = (): ChallengeContext => ({
+  label: "",
+  title: "",
+  problem: "",
+  status: "",
+  quotes: [],
+  sources: [],
+});
+
+export type Challenge = {
+  /** The theme name (from the configured themes list). */
+  theme: string;
+  /** Whether this reads as a challenge or an aspiration. */
+  mood: ChallengeMood;
+  /** The overall recurring pattern across the contexts below. */
+  summary: string;
+  /** One or more problems / business contexts. */
+  contexts: ChallengeContext[];
   tag: string;
-  /** Where the problem / claims were pulled from. */
+  /** Challenge-level source links. */
   sources: SourceLink[];
 };
 
@@ -88,11 +107,22 @@ export type ChannelStat = {
   value: string;
 };
 
+/** Suggested stakeholder categories (free text is also allowed). */
+export const STAKEHOLDER_CATEGORIES = [
+  "Management stakeholder",
+  "Business head",
+  "Functional head — CHRO / HR",
+  "Functional head — Sales & Marketing",
+  "Functional head — other",
+] as const;
+
 /** A decision-making stakeholder inside a business vertical. */
 export type Stakeholder = {
   name: string;
   role: string;
   photoUrl: string;
+  /** e.g. Management stakeholder / Business head / Functional head. */
+  category: string;
   /** Where they sit in the org hierarchy (e.g. "Reports to the Group CEO"). */
   hierarchy: string;
   educationUG: string;
@@ -101,11 +131,15 @@ export type Stakeholder = {
   experienceCurrent: string;
   /** Previous roles & companies. */
   experiencePrevious: string;
+  /** Caveats / confirmation notes. */
+  note: string;
 };
 
 export const emptyStakeholder = (): Stakeholder => ({
   name: "",
   role: "",
+  category: "",
+  note: "",
   photoUrl: "",
   hierarchy: "",
   educationUG: "",
@@ -262,11 +296,13 @@ export function toStakeholders(value: unknown): Stakeholder[] {
           name: str(o, "name"),
           role: str(o, "role", "title", "designation"),
           photoUrl: str(o, "photoUrl", "photo", "image", "pic"),
+          category: str(o, "category", "group", "type"),
           hierarchy: str(o, "hierarchy", "position", "level", "reportsTo"),
           educationUG: str(o, "educationUG", "ug", "undergrad", "bachelors"),
           educationPG: str(o, "educationPG", "pg", "postgrad", "masters"),
           experienceCurrent: str(o, "experienceCurrent", "current", "currentRole"),
           experiencePrevious: str(o, "experiencePrevious", "previous", "priorRoles", "past"),
+          note: str(o, "note", "caveat", "confirmation"),
         };
       }
       // Legacy "Name — role — context" bullet string.
@@ -331,28 +367,54 @@ function normalizeVertical(raw: unknown): Vertical {
   };
 }
 
+function normalizeChallengeContext(raw: unknown): ChallengeContext {
+  const o = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
+  const quotes = toQuotes(o["quotes"]);
+  const legacyQuote = str(o, "quote");
+  if (!quotes.length && legacyQuote) {
+    quotes.push({ text: legacyQuote, by: str(o, "quoteBy", "by"), sourceLabel: "", sourceUrl: "" });
+  }
+  return {
+    label: str(o, "label", "context", "vertical", "businessContext"),
+    title: str(o, "title", "name", "framing", "headline"),
+    problem: str(o, "problem", "explanation", "description", "what"),
+    status: str(o, "status", "currentStatus"),
+    quotes,
+    sources: toSources(o["sources"] ?? o["references"] ?? o["links"]),
+  };
+}
+
 function normalizeChallenge(raw: unknown): Challenge {
   const c = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
-  const quotes = toQuotes(c["quotes"]);
-  const legacyQuote = str(c, "quote");
-  if (!quotes.length && legacyQuote) {
-    quotes.push({
-      text: legacyQuote,
-      by: str(c, "quoteBy", "quoteby", "by"),
-      sourceLabel: "",
-      sourceUrl: "",
+
+  let contexts = Array.isArray(c["contexts"])
+    ? (c["contexts"] as unknown[])
+        .map(normalizeChallengeContext)
+        .filter((x) => x.problem || x.title || x.label || x.quotes.length)
+    : [];
+
+  // Migrate a legacy single-problem challenge into one context.
+  if (!contexts.length) {
+    const legacy = normalizeChallengeContext({
+      label: str(c, "themeExample", "example", "context"),
+      problem: str(c, "problem", "explanation", "description"),
+      status: str(c, "status", "currentStatus"),
+      quotes: c["quotes"],
+      quote: str(c, "quote"),
+      quoteBy: str(c, "quoteBy", "by"),
     });
+    if (legacy.problem || legacy.quotes.length || legacy.label) contexts = [legacy];
   }
+
   const moodRaw = str(c, "mood").toLowerCase();
   const mood: ChallengeMood =
     moodRaw === "aspiration" ? "aspiration" : moodRaw === "challenge" ? "challenge" : "";
+
   return {
     theme: str(c, "theme", "category"),
-    themeExample: str(c, "themeExample", "example", "context"),
     mood,
-    problem: str(c, "problem", "explanation", "description"),
-    status: str(c, "status", "currentStatus"),
-    quotes,
+    summary: str(c, "summary", "overview", "pattern"),
+    contexts,
     tag: str(c, "tag", "scope"),
     sources: toSources(c["sources"] ?? c["references"] ?? c["links"]),
   };

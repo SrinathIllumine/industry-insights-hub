@@ -33,13 +33,19 @@ const PROFILE_SHAPE = `{
   },
   "challenges": [
     {
-      "theme": "one of the allowed theme names; if a problem genuinely does not fit any, keep the closest and say so in the problem text",
-      "themeExample": "the specific example / business context under that theme this problem represents",
+      "theme": "one of the allowed theme names; if it genuinely does not fit any, keep the closest and say so",
       "mood": "challenge (a problem / threat) or aspiration (a goal / ambition) — read the tone of the content",
-      "problem": "a thorough, plain-language explanation (4-8 sentences) that ANY reader can understand: what is actually happening, why it exists, what is at stake, how it is playing out, and the leadership response",
-      "status": "one short line — where this stands right now (e.g. 'Actively defending; share recovering from 36% to 46%')",
-      "quotes": [
-        { "text": "VERBATIM quote from the input, directly about THIS problem", "by": "name / role of the speaker", "sourceLabel": "publication", "sourceUrl": "https URL for this quote" }
+      "summary": "1-3 sentences on the overall recurring pattern across the contexts below",
+      "contexts": [
+        {
+          "label": "which business / vertical this context is about, e.g. 'Passenger Vehicles'",
+          "title": "the specific framing of the problem in this context",
+          "problem": "a thorough, plain-language explanation (4-8 sentences): what is happening, why, what is at stake, how it is playing out, and the leadership response",
+          "status": "one short line — where this stands right now",
+          "quotes": [
+            { "text": "VERBATIM quote about THIS context", "by": "name / role", "sourceLabel": "publication", "sourceUrl": "https URL" }
+          ]
+        }
       ],
       "tag": "one of the allowed challenge tags",
       "sources": [ { "label": "publication / doc name", "url": "https URL a key claim was pulled from" } ]
@@ -61,7 +67,7 @@ const PROFILE_SHAPE = `{
       "mixChartCaption": "1-2 sentences on what a product/volume/revenue mix chart for this vertical shows (leave imageUrl-type fields out; the app attaches the image)",
       "channelModelName": "e.g. Dealer Franchise Model (dominant channel)",
       "stakeholders": [
-        { "name": "", "role": "designation / what they decide", "hierarchy": "where they sit in the org, e.g. 'Reports to Group CEO'", "educationUG": "undergrad degree & institute if stated", "educationPG": "postgrad degree & institute if stated", "experienceCurrent": "current mandate", "experiencePrevious": "prior roles & companies" }
+        { "name": "", "role": "designation", "category": "Management stakeholder | Business head | Functional head — CHRO / HR | Functional head — Sales & Marketing | Functional head — other", "hierarchy": "where they sit in the org", "educationUG": "undergrad degree & institute if stated", "educationPG": "postgrad degree & institute if stated", "experienceCurrent": "current mandate", "experiencePrevious": "prior roles & companies", "note": "any caveat / confirmation note" }
       ],
       "engagementModel": ["one bullet per step / mechanism of how the channel engagement works"],
       "channelStats": [ { "label": "e.g. Dealers / Dealer sales executives per dealership / Company sales & commercial workforce / Retail outlets", "value": "the number incl. any 'est.'/'confirmed' qualifier, e.g. ~750 est." } ],
@@ -99,8 +105,8 @@ Rules:
 - "grades" express how good each financial figure is: "good" (healthy/growing), "warn" (flat/mild concern), "bad" (loss/decline), "none" (no basis).
 - Each metric's values and grades arrays must have exactly the same length as "years".
 - financials.narrative must be exactly two sentences and must include a forward-looking view.
-- challenges[].problem must be a detailed multi-sentence explanation, not a headline.
-- challenges[].quotes: include every verbatim quote in the input that is clearly about that same problem (there may be several, or none). Never force-fit a quote to the wrong problem. Attach each quote's own source URL when the input shows one.
+- A challenge can carry SEVERAL contexts (one per business / vertical where the same pattern shows up). Each context.problem must be a detailed multi-sentence explanation, not a headline.
+- context.quotes: include every verbatim quote in the input that is clearly about that same context (there may be several, or none). Never force-fit a quote. Attach each quote's own source URL when the input shows one.
 - Do NOT put image URLs or data URIs anywhere. The app attaches chart / map / engagement-map images itself — you only write their titles and captions.
 - Only include a source if a real URL or named document appears in the input.
 - Preserve depth: revenueInsight, channelMethodology and verticalsNote should carry the full nuance from the input, not a summary.

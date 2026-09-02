@@ -407,14 +407,9 @@ export function ProfileView({
                       >
                         {kind}
                       </span>
-                      <h4 className="mt-2 text-sm font-bold uppercase tracking-wide text-muted-foreground">
+                      <h4 className="mt-2 font-display text-lg font-bold text-foreground">
                         {challenge.theme || "Unassigned theme"}
                       </h4>
-                      {challenge.themeExample ? (
-                        <p className="mt-1 text-sm font-medium text-foreground">
-                          {challenge.themeExample}
-                        </p>
-                      ) : null}
                     </div>
                     {challenge.tag ? (
                       <span className="rounded-full bg-primary px-3 py-1 text-[10px] font-bold uppercase text-primary-foreground">
@@ -423,22 +418,56 @@ export function ProfileView({
                     ) : null}
                   </div>
 
-                  {challenge.problem ? (
-                    <ExpandableText text={challenge.problem} />
-                  ) : (
-                    <p className="text-sm text-muted-foreground">—</p>
-                  )}
-
-                  {challenge.status ? (
-                    <p className="mt-4 rounded-lg bg-card px-4 py-2 text-sm font-medium text-foreground">
-                      <span className="label-caps mr-2">Status</span>
-                      {challenge.status}
+                  {challenge.summary ? (
+                    <p className="whitespace-pre-line text-[15px] leading-relaxed text-foreground">
+                      {challenge.summary}
                     </p>
                   ) : null}
 
-                  {challenge.quotes.map((q, qi) => (
-                    <QuoteBlock key={qi} q={q} />
-                  ))}
+                  {challenge.contexts.length === 0 ? (
+                    <p className="mt-2 text-sm text-muted-foreground">—</p>
+                  ) : (
+                    <div
+                      className={cn(
+                        "space-y-5",
+                        challenge.contexts.length > 1 || challenge.summary ? "mt-5" : "",
+                      )}
+                    >
+                      {challenge.contexts.map((ctx, ci) => (
+                        <div
+                          key={ci}
+                          className={cn(
+                            challenge.contexts.length > 1 &&
+                              "rounded-xl border-l-2 border-primary bg-card p-4",
+                          )}
+                        >
+                          {ctx.label ? (
+                            <span className="label-caps">{ctx.label}</span>
+                          ) : null}
+                          {ctx.title ? (
+                            <p className="mb-2 mt-0.5 text-[15px] font-semibold text-foreground">
+                              {ctx.title}
+                            </p>
+                          ) : null}
+                          {ctx.problem ? (
+                            <ExpandableText text={ctx.problem} />
+                          ) : (
+                            <p className="text-sm text-muted-foreground">—</p>
+                          )}
+                          {ctx.status ? (
+                            <p className="mt-3 rounded-lg bg-muted/60 px-4 py-2 text-sm font-medium text-foreground">
+                              <span className="label-caps mr-2">Status</span>
+                              {ctx.status}
+                            </p>
+                          ) : null}
+                          {ctx.quotes.map((q, qi) => (
+                            <QuoteBlock key={qi} q={q} />
+                          ))}
+                          <Sources sources={ctx.sources} />
+                        </div>
+                      ))}
+                    </div>
+                  )}
 
                   <Sources sources={challenge.sources} />
                 </div>
@@ -629,7 +658,7 @@ export function ProfileView({
           {popup?.kind === "contributions" ? (
             popup.v.contributions.length === 0 ? (
               <p className="text-sm text-muted-foreground">
-                No models selected for this vertical yet.
+                To be defined — add contributions in the editor.
               </p>
             ) : (
               <div className="space-y-4">
@@ -696,31 +725,59 @@ function PartnerCard({ partner }: { partner: Partner }) {
 
 /* ---------- stakeholders ---------- */
 
+function StakeholderCard({ k }: { k: Stakeholder }) {
+  return (
+    <div className="rounded-xl border border-border bg-muted/40 p-4">
+      <div className="flex items-start gap-3">
+        <Avatar src={k.photoUrl} name={k.name} />
+        <div className="min-w-0">
+          <p className="font-display text-base font-bold text-foreground">{k.name || "Unnamed"}</p>
+          {k.role ? <p className="text-sm text-muted-foreground">{k.role}</p> : null}
+        </div>
+      </div>
+      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+        <Field label="Position in hierarchy" value={k.hierarchy} />
+        <Field label="Current" value={k.experienceCurrent} />
+        <Field label="Education — UG" value={k.educationUG} />
+        <Field label="Education — PG" value={k.educationPG} />
+        <div className="sm:col-span-2">
+          <Field label="Previous experience" value={k.experiencePrevious} />
+        </div>
+      </div>
+      {k.note ? (
+        <p className="mt-3 rounded-lg bg-muted/60 p-2.5 text-xs leading-relaxed text-muted-foreground">
+          {k.note}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 function StakeholderList({ people }: { people: Stakeholder[] }) {
   if (people.length === 0) {
     return <p className="text-sm text-muted-foreground">No stakeholders captured yet.</p>;
   }
+  // Group by category, preserving first-seen order.
+  const groups: { category: string; people: Stakeholder[] }[] = [];
+  for (const k of people) {
+    const cat = k.category || "Other stakeholders";
+    let g = groups.find((x) => x.category === cat);
+    if (!g) {
+      g = { category: cat, people: [] };
+      groups.push(g);
+    }
+    g.people.push(k);
+  }
+
   return (
-    <div className="space-y-4">
-      {people.map((k, i) => (
-        <div key={i} className="rounded-xl border border-border bg-muted/40 p-4">
-          <div className="flex items-start gap-3">
-            <Avatar src={k.photoUrl} name={k.name} />
-            <div className="min-w-0">
-              <p className="font-display text-base font-bold text-foreground">
-                {k.name || "Unnamed"}
-              </p>
-              {k.role ? <p className="text-sm text-muted-foreground">{k.role}</p> : null}
-            </div>
-          </div>
-          <div className="mt-3 grid gap-3 sm:grid-cols-2">
-            <Field label="Position in hierarchy" value={k.hierarchy} />
-            <Field label="Current" value={k.experienceCurrent} />
-            <Field label="Education — UG" value={k.educationUG} />
-            <Field label="Education — PG" value={k.educationPG} />
-            <div className="sm:col-span-2">
-              <Field label="Previous experience" value={k.experiencePrevious} />
-            </div>
+    <div className="space-y-6">
+      {groups.map((g, gi) => (
+        <div key={gi}>
+          <p className="label-caps mb-3">{g.category}</p>
+          <div className="space-y-4">
+            {g.people.map((k, i) => (
+              <StakeholderCard key={i} k={k} />
+            ))}
           </div>
         </div>
       ))}
@@ -832,14 +889,12 @@ function VerticalColumn({
         {hasEngagement ? (
           <ClickIn label="Channel engagement model" onClick={() => onOpen("engagementModel")} />
         ) : null}
-        {v.contributions.length > 0 ? (
-          <ClickIn
-            label="Illumine's potential contributions"
-            count={v.contributions.length}
-            highlight
-            onClick={() => onOpen("contributions")}
-          />
-        ) : null}
+        <ClickIn
+          label="Illumine's potential contributions"
+          count={v.contributions.length}
+          highlight
+          onClick={() => onOpen("contributions")}
+        />
       </div>
     </div>
   );
