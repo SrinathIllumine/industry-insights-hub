@@ -7,6 +7,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import type {
   Challenge,
@@ -604,7 +605,7 @@ export function ProfileView({
         ) : (
           <div className="space-y-8">
             {mappedPartners.length > 0 ? (
-              <div className="grid gap-4 xl:grid-cols-2">
+              <div className="space-y-4">
                 {mappedPartners.map((p) => (
                   <PartnerCard key={p.id} partner={p} />
                 ))}
@@ -712,16 +713,14 @@ export function ProfileView({
               <div className="space-y-4">
                 {popup.v.contributions.map((c, i) => (
                   <div key={i} className="rounded-xl border border-border bg-muted/40 p-4">
-                    <div className="flex flex-wrap items-center gap-2">
-                      {c.stakeholders ? (
-                        <span className="rounded-md bg-primary px-2.5 py-1 text-xs font-bold text-primary-foreground">
-                          {c.stakeholders}
-                        </span>
-                      ) : null}
-                      <span className="font-display text-base font-bold text-foreground">
-                        {c.model || "Model (unnamed)"}
+                    {c.stakeholders ? (
+                      <span className="inline-block rounded-md bg-primary px-2.5 py-1 text-xs font-bold text-primary-foreground">
+                        {c.stakeholders}
                       </span>
-                    </div>
+                    ) : null}
+                    <p className="mt-2 font-display text-base font-bold text-foreground">
+                      {c.model || "Model (unnamed)"}
+                    </p>
                     <p className="mt-3 label-caps">What happens here?</p>
                     <p className="mt-1 whitespace-pre-line text-sm leading-relaxed text-foreground">
                       {c.whatHappens || "Not captured yet."}
@@ -773,17 +772,20 @@ function PartnerCard({ partner }: { partner: Partner }) {
             </a>
           ) : null}
           {partner.experience.length > 0 ? (
-            <ul className="mt-4 space-y-2">
-              {partner.experience.map((e, i) => (
-                <li key={i} className="text-sm text-foreground">
-                  <span className="font-semibold">{e.role || "Role"}</span>
-                  {e.organisation ? (
-                    <span className="text-muted-foreground"> · {e.organisation}</span>
-                  ) : null}
-                  {e.period ? <span className="text-muted-foreground"> · {e.period}</span> : null}
-                </li>
-              ))}
-            </ul>
+            <>
+              <p className="label-caps mt-4">Experience</p>
+              <ul className="mt-1.5 grid gap-x-8 gap-y-2 md:grid-cols-2">
+                {partner.experience.map((e, i) => (
+                  <li key={i} className="text-sm text-foreground">
+                    <span className="font-semibold">{e.role || "Role"}</span>
+                    {e.organisation ? (
+                      <span className="text-muted-foreground"> · {e.organisation}</span>
+                    ) : null}
+                    {e.period ? <span className="text-muted-foreground"> · {e.period}</span> : null}
+                  </li>
+                ))}
+              </ul>
+            </>
           ) : null}
         </div>
       </div>
@@ -836,35 +838,53 @@ function StakeholderCard({ k }: { k: Stakeholder }) {
   );
 }
 
+const STAKEHOLDER_TABS = [
+  { id: "management", label: "Management heads", match: /manage|leadership|chair|board|md\b|ceo/i },
+  { id: "business", label: "Business head", match: /business head|vertical head|bu head/i },
+  { id: "functional", label: "Functional heads", match: /function|chro|hr\b|sales|market|cfo|cmo|cto/i },
+] as const;
+
+function stakeholderBucket(category: string): string {
+  const c = category.trim();
+  const hit = STAKEHOLDER_TABS.find((t) => t.match.test(c));
+  return hit ? hit.id : "functional";
+}
+
 function StakeholderList({ people }: { people: Stakeholder[] }) {
   if (people.length === 0) {
     return <p className="text-sm text-muted-foreground">No stakeholders captured yet.</p>;
   }
-  // Group by category, preserving first-seen order.
-  const groups: { category: string; people: Stakeholder[] }[] = [];
+
+  const byTab: Record<string, Stakeholder[]> = { management: [], business: [], functional: [] };
   for (const k of people) {
-    const cat = k.category || "Other stakeholders";
-    let g = groups.find((x) => x.category === cat);
-    if (!g) {
-      g = { category: cat, people: [] };
-      groups.push(g);
-    }
-    g.people.push(k);
+    const bucket = byTab[stakeholderBucket(k.category)];
+    if (bucket) bucket.push(k);
   }
 
   return (
-    <div className="space-y-6">
-      {groups.map((g, gi) => (
-        <div key={gi}>
-          <p className="label-caps mb-3">{g.category}</p>
-          <div className="space-y-4">
-            {g.people.map((k, i) => (
-              <StakeholderCard key={i} k={k} />
-            ))}
-          </div>
-        </div>
+    <Tabs defaultValue={STAKEHOLDER_TABS.find((t) => (byTab[t.id]?.length ?? 0) > 0)?.id ?? "management"}>
+      <TabsList className="flex-wrap">
+        {STAKEHOLDER_TABS.map((t) => (
+          <TabsTrigger key={t.id} value={t.id}>
+            {t.label}
+            {byTab[t.id]?.length ? (
+              <span className="ml-1.5 rounded-full bg-background/60 px-1.5 text-[10px] font-bold">
+                {byTab[t.id]?.length}
+              </span>
+            ) : null}
+          </TabsTrigger>
+        ))}
+      </TabsList>
+      {STAKEHOLDER_TABS.map((t) => (
+        <TabsContent key={t.id} value={t.id} className="space-y-4 pt-4">
+          {(byTab[t.id]?.length ?? 0) === 0 ? (
+            <p className="text-sm text-muted-foreground">None captured under this category.</p>
+          ) : (
+            (byTab[t.id] ?? []).map((k, i) => <StakeholderCard key={i} k={k} />)
+          )}
+        </TabsContent>
       ))}
-    </div>
+    </Tabs>
   );
 }
 
