@@ -310,33 +310,62 @@ export async function deleteCompany(id: string) {
   if (error) throw error;
 }
 
-/* ---------------- partner profiles ---------------- */
+/* ---------------- partner profiles ----------------
+ * Stored as a JSON array in app_settings (key "partner_profiles") so no
+ * dedicated table / migration is required. They are reusable across companies.
+ */
+
+const PARTNERS_KEY = "partner_profiles";
+
+function normalizePartner(x: unknown): Partner {
+  const r = (x && typeof x === "object" ? x : {}) as Record<string, unknown>;
+  return {
+    id: String(r["id"] ?? ""),
+    name: String(r["name"] ?? "").trim(),
+    photo_url: String(r["photo_url"] ?? r["photoUrl"] ?? "").trim(),
+    linkedin_url: String(r["linkedin_url"] ?? r["linkedinUrl"] ?? "").trim(),
+    experience: toPartnerRoles(r["experience"]),
+    updated_at: String(r["updated_at"] ?? ""),
+  };
+}
+
+async function readPartners(): Promise<Partner[]> {
+  const { data, error } = await supabase
+    .from("app_settings")
+    .select("value")
+    .eq("key", PARTNERS_KEY)
+    .maybeSingle();
+  if (error) throw error;
+  const value = data ? data.value : null;
+  const arr = Array.isArray(value) ? (value as unknown[]) : [];
+  return arr.map(normalizePartner).filter((p) => p.id && p.name);
+}
+
+async function writePartners(partners: Partner[]): Promise<void> {
+  const { error } = await supabase
+    .from("app_settings")
+    .upsert({ key: PARTNERS_KEY, value: partners as never }, { onConflict: "key" });
+  if (error) throw error;
+}
 
 export const partnersQuery = queryOptions({
   queryKey: ["partners"],
   queryFn: async (): Promise<Partner[]> => {
-    const { data, error } = await supabase
-      .from("partners")
-      .select("id, name, photo_url, linkedin_url, experience, updated_at")
-      .order("name", { ascending: true });
-    // The `partners` table may not exist yet (migration pending) — degrade gracefully.
-    if (error) {
-      console.warn("partners query failed", error.message);
+    try {
+      const partners = await readPartners();
+      return [...partners].sort((a, b) => a.name.localeCompare(b.name));
+    } catch (error) {
+      console.warn("partners query failed", (error as Error).message);
       return [];
     }
-    return (data ?? []).map((row) => {
-      const r = row as Record<string, unknown>;
-      return {
-        id: String(r["id"] ?? ""),
-        name: String(r["name"] ?? ""),
-        photo_url: String(r["photo_url"] ?? ""),
-        linkedin_url: String(r["linkedin_url"] ?? ""),
-        experience: toPartnerRoles(r["experience"]),
-        updated_at: String(r["updated_at"] ?? ""),
-      };
-    });
   },
 });
+
+function newPartnerId(): string {
+  return typeof crypto !== "undefined" && "randomUUID" in crypto
+    ? crypto.randomUUID()
+    : `p-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
 
 export async function upsertPartner(input: {
   id?: string;
@@ -345,21 +374,26 @@ export async function upsertPartner(input: {
   linkedin_url: string;
   experience: PartnerRole[];
 }): Promise<string> {
-  const row = {
-    ...(input.id ? { id: input.id } : {}),
+  const existing = await readPartners();
+  const id = input.id || newPartnerId();
+  const record: Partner = {
+    id,
     name: input.name,
     photo_url: input.photo_url,
     linkedin_url: input.linkedin_url,
-    experience: input.experience as never,
+    experience: input.experience,
+    updated_at: new Date().toISOString(),
   };
-  const { data, error } = await supabase.from("partners").upsert(row).select("id").single();
-  if (error) throw error;
-  return (data as { id: string }).id;
+  const next = existing.some((p) => p.id === id)
+    ? existing.map((p) => (p.id === id ? record : p))
+    : [...existing, record];
+  await writePartners(next);
+  return id;
 }
 
-export async function deletePartner(id: string) {
-  const { error } = await supabase.from("partners").delete().eq("id", id);
-  if (error) throw error;
+export async function deletePartner(id: string): Promise<void> {
+  const existing = await readPartners();
+  await writePartners(existing.filter((p) => p.id !== id));
 }
 
 const MEDIA_BUCKET = "company-media";
