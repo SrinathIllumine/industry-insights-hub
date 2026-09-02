@@ -404,14 +404,14 @@ export function ProfileView({
         ) : null}
 
         {fin.insights.length > 0 ? (
-          <div className="mt-8 rounded-xl border-l-4 border-primary bg-primary p-5 text-primary-foreground">
-            <span className="text-[11px] font-bold uppercase tracking-widest opacity-70">
+          <div className="mt-8 rounded-lg border border-border bg-card p-5">
+            <span className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
               What this means for the business
             </span>
-            <ul className="mt-2 space-y-2">
+            <ul className="mt-3 space-y-2.5">
               {fin.insights.map((line, i) => (
-                <li key={i} className="flex gap-3 text-[15px] leading-relaxed">
-                  <span className="mt-2 size-1.5 shrink-0 rounded-full bg-primary-foreground/70" />
+                <li key={i} className="flex gap-3 text-[15px] leading-relaxed text-foreground">
+                  <span className="mt-2 size-1.5 shrink-0 rounded-full bg-primary" />
                   <span>
                     <RichText text={line} />
                   </span>
@@ -604,7 +604,7 @@ export function ProfileView({
         ) : (
           <div className="space-y-8">
             {mappedPartners.length > 0 ? (
-              <div className="grid gap-4 md:grid-cols-2">
+              <div className="grid gap-4 xl:grid-cols-2">
                 {mappedPartners.map((p) => (
                   <PartnerCard key={p.id} partner={p} />
                 ))}
@@ -712,12 +712,16 @@ export function ProfileView({
               <div className="space-y-4">
                 {popup.v.contributions.map((c, i) => (
                   <div key={i} className="rounded-xl border border-border bg-muted/40 p-4">
-                    {c.stakeholders ? (
-                      <p className="label-caps mb-1">{c.stakeholders}</p>
-                    ) : null}
-                    <p className="font-display text-base font-bold text-foreground">
-                      {c.model || "Model (unnamed)"}
-                    </p>
+                    <div className="flex flex-wrap items-center gap-2">
+                      {c.stakeholders ? (
+                        <span className="rounded-md bg-primary px-2.5 py-1 text-xs font-bold text-primary-foreground">
+                          {c.stakeholders}
+                        </span>
+                      ) : null}
+                      <span className="font-display text-base font-bold text-foreground">
+                        {c.model || "Model (unnamed)"}
+                      </span>
+                    </div>
                     <p className="mt-3 label-caps">What happens here?</p>
                     <p className="mt-1 whitespace-pre-line text-sm leading-relaxed text-foreground">
                       {c.whatHappens || "Not captured yet."}
@@ -736,36 +740,67 @@ export function ProfileView({
 /* ---------- partner ---------- */
 
 function PartnerCard({ partner }: { partner: Partner }) {
+  const [zoom, setZoom] = useState(false);
   return (
-    <div className="rounded-xl border border-border bg-muted/30 p-4">
-      <div className="flex items-start gap-3">
-        <Avatar src={partner.photo_url} name={partner.name} size="size-14" />
-        <div className="min-w-0">
-          <p className="font-display text-base font-bold text-foreground">{partner.name}</p>
+    <div className="rounded-2xl border border-border bg-muted/30 p-6">
+      <div className="flex flex-col items-start gap-5 sm:flex-row">
+        {partner.photo_url ? (
+          <button
+            type="button"
+            onClick={() => setZoom(true)}
+            className="shrink-0 cursor-zoom-in"
+            aria-label={`Enlarge photo of ${partner.name}`}
+          >
+            <img
+              src={partner.photo_url}
+              alt={partner.name}
+              className="size-28 rounded-xl border border-border object-cover"
+            />
+          </button>
+        ) : (
+          <Avatar src="" name={partner.name} size="size-28 text-2xl rounded-xl" />
+        )}
+        <div className="min-w-0 flex-1">
+          <p className="font-display text-xl font-bold text-foreground">{partner.name}</p>
           {partner.linkedin_url ? (
             <a
               href={partner.linkedin_url}
               target="_blank"
               rel="noopener noreferrer"
-              className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+              className="mt-1 inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline"
             >
-              <Linkedin className="size-3" /> LinkedIn
+              <Linkedin className="size-4" /> LinkedIn profile
             </a>
+          ) : null}
+          {partner.experience.length > 0 ? (
+            <ul className="mt-4 space-y-2">
+              {partner.experience.map((e, i) => (
+                <li key={i} className="text-sm text-foreground">
+                  <span className="font-semibold">{e.role || "Role"}</span>
+                  {e.organisation ? (
+                    <span className="text-muted-foreground"> · {e.organisation}</span>
+                  ) : null}
+                  {e.period ? <span className="text-muted-foreground"> · {e.period}</span> : null}
+                </li>
+              ))}
+            </ul>
           ) : null}
         </div>
       </div>
-      {partner.experience.length > 0 ? (
-        <ul className="mt-3 space-y-1.5">
-          {partner.experience.map((e, i) => (
-            <li key={i} className="text-sm text-foreground">
-              <span className="font-semibold">{e.role || "Role"}</span>
-              {e.organisation ? (
-                <span className="text-muted-foreground"> · {e.organisation}</span>
-              ) : null}
-              {e.period ? <span className="text-muted-foreground"> · {e.period}</span> : null}
-            </li>
-          ))}
-        </ul>
+
+      {partner.photo_url ? (
+        <Dialog open={zoom} onOpenChange={setZoom}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>{partner.name}</DialogTitle>
+            </DialogHeader>
+            <img
+              src={partner.photo_url}
+              alt={partner.name}
+              className="w-full rounded-xl border border-border object-contain"
+            />
+          </DialogContent>
+        </Dialog>
       ) : null}
     </div>
   );
