@@ -19,6 +19,13 @@ import type {
   Vertical,
 } from "@/lib/research-types";
 
+const CONTEXT_LABEL_COLORS = [
+  "bg-good-soft text-good-foreground",
+  "bg-warn-soft text-warn-foreground",
+  "bg-bad-soft text-bad-foreground",
+  "bg-primary text-primary-foreground",
+];
+
 const gradeClass: Record<Grade, string> = {
   good: "bg-good-soft text-good-foreground font-semibold",
   warn: "bg-warn-soft text-warn-foreground font-semibold",
@@ -93,6 +100,24 @@ function Callout({ label, text }: { label: string; text: string }) {
       <span className="label-caps">{label}</span>
       <p className="mt-1 whitespace-pre-line text-[15px] leading-relaxed text-foreground">{text}</p>
     </div>
+  );
+}
+
+/** Renders text with `**bold**` segments as <strong> (inherits colour). */
+function RichText({ text }: { text: string }) {
+  const parts = text.split(/(\*\*[^*]+\*\*)/g);
+  return (
+    <>
+      {parts.map((p, i) =>
+        /^\*\*[^*]+\*\*$/.test(p) ? (
+          <strong key={i} className="font-bold">
+            {p.slice(2, -2)}
+          </strong>
+        ) : (
+          <span key={i}>{p}</span>
+        ),
+      )}
+    </>
   );
 }
 
@@ -378,7 +403,23 @@ export function ProfileView({
           </div>
         ) : null}
 
-        {fin.narrative ? (
+        {fin.insights.length > 0 ? (
+          <div className="mt-8 rounded-xl border-l-4 border-primary bg-primary p-5 text-primary-foreground">
+            <span className="text-[11px] font-bold uppercase tracking-widest opacity-70">
+              What this means for the business
+            </span>
+            <ul className="mt-2 space-y-2">
+              {fin.insights.map((line, i) => (
+                <li key={i} className="flex gap-3 text-[15px] leading-relaxed">
+                  <span className="mt-2 size-1.5 shrink-0 rounded-full bg-primary-foreground/70" />
+                  <span>
+                    <RichText text={line} />
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : fin.narrative ? (
           <div className="mt-8">
             <Callout label="Insight" text={fin.narrative} />
           </div>
@@ -442,10 +483,17 @@ export function ProfileView({
                           )}
                         >
                           {ctx.label ? (
-                            <span className="label-caps">{ctx.label}</span>
+                            <span
+                              className={cn(
+                                "inline-block rounded-full px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-wide",
+                                CONTEXT_LABEL_COLORS[ci % CONTEXT_LABEL_COLORS.length],
+                              )}
+                            >
+                              {ctx.label}
+                            </span>
                           ) : null}
                           {ctx.title ? (
-                            <p className="mb-2 mt-0.5 text-[15px] font-semibold text-foreground">
+                            <p className="mb-2 mt-1.5 text-[15px] font-semibold text-foreground">
                               {ctx.title}
                             </p>
                           ) : null}
@@ -514,7 +562,7 @@ export function ProfileView({
             <table className="w-full text-sm">
               <thead className="bg-muted">
                 <tr>
-                  {["Year", "Area", "Category", "Initiative", "What it does", "How it is done"].map(
+                  {["Area", "Category", "Initiative", "Year", "What it does", "How it is done"].map(
                     (h) => (
                       <th key={h} className="p-4 text-left font-semibold text-muted-foreground">
                         {h}
@@ -526,7 +574,6 @@ export function ProfileView({
               <tbody>
                 {profile.initiatives.map((row, i) => (
                   <tr key={i} className="border-t border-border align-top">
-                    <td className="whitespace-nowrap p-4 font-medium">{row.year || "—"}</td>
                     <td className="p-4 font-medium">{row.area}</td>
                     <td className="p-4">
                       {row.category ? (
@@ -539,6 +586,7 @@ export function ProfileView({
                       ) : null}
                     </td>
                     <td className="p-4 font-medium">{row.initiative}</td>
+                    <td className="whitespace-nowrap p-4 font-medium">{row.year || "—"}</td>
                     <td className="p-4 text-muted-foreground">{row.whatItDoes}</td>
                     <td className="p-4 text-muted-foreground">{row.howItIsDone}</td>
                   </tr>
@@ -869,6 +917,15 @@ function VerticalColumn({
               </ul>
             </div>
           ) : null}
+        </div>
+      ) : null}
+
+      {v.revenueInsight ? (
+        <div className="mb-4 rounded-xl border border-border bg-card p-4">
+          <span className="label-caps">Revenue detail</span>
+          <p className="mt-1 whitespace-pre-line text-sm leading-relaxed text-foreground">
+            {v.revenueInsight}
+          </p>
         </div>
       ) : null}
 

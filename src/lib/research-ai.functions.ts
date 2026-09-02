@@ -29,7 +29,7 @@ const PROFILE_SHAPE = `{
     "charts": [
       { "title": "what the chart shows", "imageUrl": "https URL of a chart/graph image found in the input, else empty", "caption": "1-2 sentences on the STORY this chart tells (trend, inflection, divergence)" }
     ],
-    "narrative": "exactly 2 sentences making sense of their financial status AND where they are headed"
+    "insights": ["3-5 bullet takeaways on what the financials mean for the business and where it is headed; wrap the key phrase of each bullet in **double asterisks** to bold it"]
   },
   "challenges": [
     {
@@ -104,7 +104,8 @@ Rules:
 - The output structure is dynamic: only populate what the input genuinely supports. Sparse input → fewer array items, empty optional fields. Rich input → more contributors, more channelStats, more charts.
 - "grades" express how good each financial figure is: "good" (healthy/growing), "warn" (flat/mild concern), "bad" (loss/decline), "none" (no basis).
 - Each metric's values and grades arrays must have exactly the same length as "years".
-- financials.narrative must be exactly two sentences and must include a forward-looking view.
+- financials.insights: 3-5 short bullet strings, each bolding its key phrase with **asterisks**; include a forward-looking view.
+- initiatives columns are: area, category, initiative, year, whatItDoes, howItIsDone.
 - A challenge can carry SEVERAL contexts (one per business / vertical where the same pattern shows up). Each context.problem must be a detailed multi-sentence explanation, not a headline.
 - context.quotes: include every verbatim quote in the input that is clearly about that same context (there may be several, or none). Never force-fit a quote. Attach each quote's own source URL when the input shows one.
 - Do NOT put image URLs or data URIs anywhere. The app attaches chart / map / engagement-map images itself — you only write their titles and captions.

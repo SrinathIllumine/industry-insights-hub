@@ -372,10 +372,11 @@ export function ProfileEditor({
             </Button>
           </div>
 
-          <TextField
-            label="Sense-making narrative (≈2 lines shown at the end of the section)"
-            value={fin.narrative}
-            onChange={(v) => setProfile({ ...profile, financials: { ...fin, narrative: v } })}
+          <BulletsField
+            label="What this means for the business (bullet points)"
+            help="One takeaway per bullet. Wrap the important phrase in **double asterisks** to bold it."
+            items={fin.insights}
+            onChange={(insights) => setProfile({ ...profile, financials: { ...fin, insights } })}
           />
         </TabsContent>
 

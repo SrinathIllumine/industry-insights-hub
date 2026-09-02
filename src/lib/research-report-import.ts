@@ -40,6 +40,26 @@ const block = (s: string | null | undefined): string =>
     .replace(/\n{3,}/g, "\n\n")
     .trim();
 
+/** Serialises an element's text, wrapping <b>/<strong> spans in `**…**`. */
+function boldMarked(el: Element): string {
+  let out = "";
+  el.childNodes.forEach((node) => {
+    if (node.nodeType === 3) {
+      out += node.textContent ?? "";
+    } else if (node.nodeType === 1) {
+      const child = node as unknown as Element;
+      const inner = boldMarked(child);
+      if (/^(?:b|strong)$/i.test(child.tagName)) {
+        const t = inner.trim();
+        out += t ? `**${t}**` : "";
+      } else {
+        out += inner;
+      }
+    }
+  });
+  return out.replace(/\s+/g, " ").trim();
+}
+
 export function looksLikeResearchReport(html: string): boolean {
   return (
     /class="(?:theme-card|vertical-section|narrative-chart|decision-box)"/i.test(html) ||
@@ -102,11 +122,18 @@ function parseFinancials(doc: Document, profile: CompanyProfile) {
     (n) => n.tagName === "IMG" && n.classList.contains("narrative-chart"),
   ) as HTMLImageElement | undefined;
 
-  const narrativeParts = [
-    clean(takeaway?.textContent).replace(/^[💡\s]+/, ""),
-    clean(desc?.textContent),
-  ].filter(Boolean);
-  fin.narrative = narrativeParts.join(" ");
+  const takeawayItems = takeaway ? Array.from(takeaway.querySelectorAll("li")) : [];
+  if (takeawayItems.length) {
+    fin.insights = takeawayItems.map((li) => boldMarked(li)).filter(Boolean);
+    fin.narrative = "";
+  } else {
+    fin.narrative = [
+      clean(takeaway?.textContent).replace(/^[💡\s]+/, ""),
+      clean(desc?.textContent),
+    ]
+      .filter(Boolean)
+      .join(" ");
+  }
 
   if (chart) {
     fin.charts = [
@@ -398,21 +425,36 @@ function parseInitiatives(doc: Document, profile: CompanyProfile) {
   const table = doc.querySelector("table.init-table") || h2ForInitTable(doc);
   if (!table) return;
   const rows = Array.from(table.querySelectorAll("tr"));
-  rows.shift(); // header
+  const header = rows.shift();
+
+  // Map columns by header text so any order works.
+  const heads = header
+    ? Array.from(header.querySelectorAll("th, td")).map((h) => clean(h.textContent).toLowerCase())
+    : [];
+  const find = (re: RegExp, fallback: number) => {
+    const i = heads.findIndex((h) => re.test(h));
+    return i === -1 ? fallback : i;
+  };
+  const col = {
+    year: find(/year|introduced|since/, 3),
+    area: find(/area/, 0),
+    category: find(/category/, 1),
+    initiative: find(/initiative|name/, 2),
+    whatItDoes: find(/what/, 4),
+    howItIsDone: find(/how/, 5),
+  };
+
   profile.initiatives = rows
     .map((r): Initiative | null => {
       const c = Array.from(r.querySelectorAll("td"));
       if (c.length < 3) return null;
-      // Detect an optional leading "Year" column.
-      const hasYear = /^(?:19|20)\d{2}(?:[–-](?:19|20)?\d{2})?$/.test(clean(c[0]?.textContent));
-      const off = hasYear ? 1 : 0;
       return {
-        year: hasYear ? clean(c[0]?.textContent) : "",
-        area: clean(c[off]?.textContent),
-        category: clean(c[off + 1]?.textContent),
-        initiative: clean(c[off + 2]?.textContent),
-        whatItDoes: block(c[off + 3]?.textContent),
-        howItIsDone: block(c[off + 4]?.textContent),
+        year: clean(c[col.year]?.textContent),
+        area: clean(c[col.area]?.textContent),
+        category: clean(c[col.category]?.textContent),
+        initiative: clean(c[col.initiative]?.textContent),
+        whatItDoes: block(c[col.whatItDoes]?.textContent),
+        howItIsDone: block(c[col.howItIsDone]?.textContent),
       };
     })
     .filter((x): x is Initiative => !!x && !!x.initiative);

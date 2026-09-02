@@ -32,8 +32,10 @@ export type Financials = {
   benchmarkNote: string;
   /** Narrative-driving charts, shown prominently. */
   charts: FinancialChart[];
-  /** ~2 lines of sense-making: where they stand financially and where headed. */
+  /** Legacy single-paragraph sense-making (kept as a fallback). */
   narrative: string;
+  /** "What this means for the business" — bullet points; `**text**` marks bold. */
+  insights: string[];
 };
 
 /** A stakeholder quote tied to a challenge, with its own source. */
@@ -545,6 +547,7 @@ export const emptyFinancials = (): Financials => ({
   benchmarkNote: "",
   charts: [],
   narrative: "",
+  insights: [],
 });
 
 export const emptyProfile = (): CompanyProfile => ({
@@ -578,6 +581,7 @@ export function normalizeProfile(raw: unknown): CompanyProfile {
       metrics,
       charts: normalizeCharts((fin as { charts?: unknown }).charts),
       narrative: typeof fin.narrative === "string" ? fin.narrative : "",
+      insights: toBullets((fin as { insights?: unknown }).insights),
     },
     challenges: Array.isArray(p.challenges) ? p.challenges.map(normalizeChallenge) : [],
     verticalsNote: typeof p.verticalsNote === "string" ? p.verticalsNote : "",
