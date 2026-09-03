@@ -33,6 +33,8 @@ import {
   deleteCompany,
   industryQuery,
 } from "@/lib/research-data";
+import { industrySnapshotQuery } from "@/lib/industry-snapshot";
+import { IndustrySnapshot } from "@/components/industry/IndustrySnapshot";
 
 export const Route = createFileRoute("/industry/$industryId")({
   head: () => ({
@@ -52,6 +54,7 @@ export const Route = createFileRoute("/industry/$industryId")({
   loader: ({ context, params }) => {
     void context.queryClient.ensureQueryData(industryQuery(params.industryId));
     void context.queryClient.ensureQueryData(companiesQuery(params.industryId));
+    void context.queryClient.ensureQueryData(industrySnapshotQuery(params.industryId));
   },
   component: IndustryPage,
   errorComponent: ({ error }) => (
@@ -94,6 +97,8 @@ function IndustryPage() {
           </Button>
         }
       />
+
+      <IndustrySnapshot industryId={industryId} industryName={industry?.name ?? "Industry"} />
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {companies.map((company) => (
