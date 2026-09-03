@@ -49,10 +49,10 @@ export function IndustrySnapshot({
             <h2 className="font-display text-lg font-bold text-foreground">Industry snapshot</h2>
             <p className="mt-0.5 text-sm text-muted-foreground">
               {snapshot
-                ? `Dominant go-to-market models and ${snapshot.charts.length} growth vs profitability ${
+                ? `Dominant retailing models and ${snapshot.charts.length} growth vs profitability ${
                     snapshot.charts.length === 1 ? "matrix" : "matrices"
                   }.`
-                : "Add a snapshot: dominant go-to-market models plus growth vs profitability matrices per vertical."}
+                : "Add a snapshot: dominant retailing models plus growth vs profitability matrices per vertical."}
             </p>
           </div>
         </div>
@@ -112,7 +112,7 @@ function SnapshotViewDialog({
 
         {snapshot.dominantModels.length > 0 ? (
           <div className="rounded-xl border border-border bg-muted/40 p-4">
-            <p className="label-caps">Dominant go-to-market models</p>
+            <p className="label-caps">Dominant retailing models</p>
             <ol className="mt-2 space-y-1.5">
               {snapshot.dominantModels.map((model, i) => (
                 <li key={i} className="flex gap-2 text-sm text-foreground">
@@ -237,7 +237,7 @@ function SnapshotEditDialog({
           <DialogTitle>Industry snapshot</DialogTitle>
           <DialogDescription>
             Upload a bubble-matrix HTML export to load the growth vs profitability charts, then add
-            the dominant go-to-market models.
+            the dominant retailing models.
           </DialogDescription>
         </DialogHeader>
 
@@ -270,7 +270,7 @@ function SnapshotEditDialog({
           </div>
 
           <div className="space-y-1.5">
-            <Label>Dominant go-to-market models (one per line)</Label>
+            <Label>Dominant retailing models (one per line)</Label>
             <Textarea
               rows={3}
               value={models}
