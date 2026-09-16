@@ -106,23 +106,33 @@ export function matchHtmlImages(
 }
 
 /**
- * Uploads any inline `data:` images referenced by the profile and swaps in the
- * hosted URLs, so the saved profile never carries a multi-MB data URI.
+ * Uploads any inline `data:` images and mirrors any external `https:` images
+ * referenced by the profile, swapping in our own hosted URLs — so the saved
+ * profile never carries a multi-MB data URI or a link to someone else's
+ * server (which can later break, rate-limit, or block hotlinking).
  */
-/** Count of inline data: images a profile carries (for progress reporting). */
-export function countInlineImages(profile: CompanyProfile): number {
-  const urls = [
+function imagesOf(profile: CompanyProfile): string[] {
+  return [
     profile.financials.benchmarkImageUrl,
     profile.verticalsImageUrl,
     ...profile.financials.charts.map((c) => c.imageUrl),
-    ...profile.verticals.flatMap((v) => [v.mixChartUrl, v.engagementMapUrl]),
+    ...profile.verticals.flatMap((v) => [
+      v.mixChartUrl,
+      v.engagementMapUrl,
+      ...v.stakeholders.map((k) => k.photoUrl),
+    ]),
   ];
-  return urls.filter((u) => /^data:/i.test(u)).length;
+}
+
+/** Count of data:/https: images a profile carries (for progress reporting). */
+export function countInlineImages(profile: CompanyProfile): number {
+  return imagesOf(profile).filter((u) => /^data:/i.test(u) || /^https?:\/\//i.test(u)).length;
 }
 
 export async function materializeProfileImages(
   profile: CompanyProfile,
-  upload: (dataUrl: string) => Promise<string>,
+  uploadData: (dataUrl: string) => Promise<string>,
+  mirrorHttp: (url: string) => Promise<string>,
   onProgress?: (done: number, total: number) => void,
 ): Promise<CompanyProfile> {
   const next: CompanyProfile = structuredClone(profile);
@@ -131,17 +141,19 @@ export async function materializeProfileImages(
   let done = 0;
 
   const swap = async (url: string): Promise<string> => {
-    if (!url || !/^data:/i.test(url)) return url;
+    const isData = /^data:/i.test(url);
+    const isHttp = /^https?:\/\//i.test(url);
+    if (!url || (!isData && !isHttp)) return url;
     const cached = cache.get(url);
     if (cached !== undefined) return cached;
-    // Keep the inline data URI as the fallback so the image always renders,
-    // even when storage upload is unavailable.
+    // Keep the original URL as the fallback so the image always renders,
+    // even when storage upload / mirroring is unavailable.
     let out = url;
     try {
-      const uploaded = await upload(url);
+      const uploaded = isData ? await uploadData(url) : await mirrorHttp(url);
       if (uploaded) out = uploaded;
     } catch {
-      /* keep the inline data URI */
+      /* keep the original URL */
     }
     cache.set(url, out);
     done += 1;
@@ -158,6 +170,7 @@ export async function materializeProfileImages(
   for (const v of next.verticals) {
     v.mixChartUrl = await swap(v.mixChartUrl);
     v.engagementMapUrl = await swap(v.engagementMapUrl);
+    for (const k of v.stakeholders) k.photoUrl = await swap(k.photoUrl);
   }
   return next;
 }

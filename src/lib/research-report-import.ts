@@ -338,6 +338,7 @@ function parseVertical(section: Element): Vertical {
       k.category = category;
       k.name = clean(pc.querySelector(".pname")?.textContent);
       k.role = clean(pc.querySelector(".ptitle")?.textContent);
+      k.photoUrl = imgSrc(pc.querySelector(".pphoto img, img.pphoto, img"));
       const flag = clean(
         pc.querySelector(".ptitle .since-flag, .ptitle .estimate-flag")?.textContent,
       );

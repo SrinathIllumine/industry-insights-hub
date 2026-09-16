@@ -862,9 +862,17 @@ function ImportPanel({
   const [phase, setPhase] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
   const structure = useServerFn(structureResearchDump);
+  const mirror = useServerFn(mirrorImageUrl);
 
   const uploadInline = (dataUrl: string) =>
     uploadCompanyImage(dataUrlToFile(dataUrl, "from-report"));
+
+  const mirrorHttp = async (url: string): Promise<string> => {
+    if (isOwnStorageUrl(url)) return url;
+    const result = await mirror({ data: { url } });
+    if (!result.ok) throw new Error(result.error);
+    return result.url;
+  };
 
   const registerImages = (images: ExtractedImage[]) => {
     if (!images.length) return;
@@ -917,7 +925,7 @@ function ImportPanel({
   ) => {
     setPhase("Placing charts, graphs & maps…");
     let profile = normalizeProfile(draft);
-    profile = await materializeProfileImages(profile, uploadInline, (done, total) =>
+    profile = await materializeProfileImages(profile, uploadInline, mirrorHttp, (done, total) =>
       setProgress(base + Math.round((done / Math.max(total, 1)) * (98 - base))),
     );
     profile = normalizeProfile(profile);
