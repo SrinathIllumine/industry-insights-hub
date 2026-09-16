@@ -46,7 +46,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { structureResearchDump } from "@/lib/research-ai.functions";
-import { deletePartner, uploadCompanyImage, upsertPartner } from "@/lib/research-data";
+import { mirrorImageUrl } from "@/lib/image-mirror.functions";
+import { deletePartner, isOwnStorageUrl, uploadCompanyImage, upsertPartner } from "@/lib/research-data";
 import type { SettingsMap } from "@/lib/research-data";
 import {
   STAKEHOLDER_CATEGORIES,
@@ -1152,6 +1153,26 @@ function ImageField({
   const [dragging, setDragging] = useState(false);
   const [pickOpen, setPickOpen] = useState(false);
   const importedImages = useContext(ImportedImagesContext);
+  const mirror = useServerFn(mirrorImageUrl);
+
+  const mirrorPastedUrl = async (raw: string) => {
+    const url = raw.trim();
+    if (!/^https?:\/\//i.test(url) || isOwnStorageUrl(url)) return;
+    setBusy(true);
+    try {
+      const result = await mirror({ data: { url } });
+      if (result.ok) {
+        onChange(result.url);
+        toast.success("Image saved to storage");
+      } else {
+        toast.error(result.error);
+      }
+    } catch (error) {
+      toast.error((error as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const handleFiles = async (files: FileList | null) => {
     const file = files?.[0];
@@ -1236,6 +1257,7 @@ function ImageField({
           placeholder="https://… image URL"
           value={value}
           onChange={(e) => onChange(e.target.value)}
+          onBlur={(e) => void mirrorPastedUrl(e.target.value)}
         />
         {value ? (
           <Button

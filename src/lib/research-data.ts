@@ -398,6 +398,12 @@ export async function deletePartner(id: string): Promise<void> {
 
 const MEDIA_BUCKET = "company-media";
 
+/** True when a URL already points at our own storage bucket. */
+export function isOwnStorageUrl(url: string): boolean {
+  const supaUrl = (import.meta.env["VITE_SUPABASE_URL"] as string | undefined) || "";
+  return !!supaUrl && url.startsWith(supaUrl);
+}
+
 /** Uploads an image to public storage and returns its public URL. */
 export async function uploadCompanyImage(file: File): Promise<string> {
   if (!file.type.startsWith("image/")) {
